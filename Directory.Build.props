@@ -13,11 +13,13 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Version>0.1.0</Version>
+    <PackageVersion>$(Version)</PackageVersion>
 
   </PropertyGroup>
 
   <!-- NuGet package metadata and versioning -->
-  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
+  <PropertyGroup>
     <Authors>ManagedCode</Authors>
     <Company>ManagedCode</Company>
     <RepositoryType>GitHub</RepositoryType>
@@ -28,11 +30,9 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <EnablePackageValidation>true</EnablePackageValidation>
-    <Version>0.1.0</Version>
-    <PackageVersion>$(Version)</PackageVersion>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+  <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
 

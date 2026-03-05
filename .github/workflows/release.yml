@@ -104,6 +104,27 @@ jobs:
         dotnet pack ClaudeCodeSharpSDK/ClaudeCodeSharpSDK.csproj --configuration Release --no-build -p:IncludeSymbols=false -p:SymbolPackageFormat=snupkg --output ./artifacts
         dotnet pack ClaudeCodeSharpSDK.Extensions.AI/ClaudeCodeSharpSDK.Extensions.AI.csproj --configuration Release --no-build -p:IncludeSymbols=false -p:SymbolPackageFormat=snupkg --output ./artifacts
 
+    - name: Validate packaged version
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${{ steps.version.outputs.version }}"
+
+        mapfile -t packages < <(find ./artifacts -maxdepth 1 -type f -name '*.nupkg' | sort)
+        if [ "${#packages[@]}" -eq 0 ]; then
+          echo "No NuGet packages were created."
+          exit 1
+        fi
+
+        for package in "${packages[@]}"; do
+          file_name=$(basename "$package")
+          echo "Validating $file_name"
+          if [[ "$file_name" != *".${VERSION}.nupkg" ]]; then
+            echo "Package version mismatch: expected filename to end with .${VERSION}.nupkg"
+            exit 1
+          fi
+        done
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -242,6 +263,25 @@ jobs:
         )
 
         if [ "${{ steps.state.outputs.release_exists }}" = "true" ]; then
+          mapfile -t existing_assets < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          for asset in "${existing_assets[@]}"; do
+            case "$asset" in
+              ManagedCode.ClaudeCodeSharpSDK*.nupkg)
+                keep_asset=false
+                for package in "${packages[@]}"; do
+                  if [ "$asset" = "$(basename "$package")" ]; then
+                    keep_asset=true
+                    break
+                  fi
+                done
+
+                if [ "$keep_asset" != "true" ]; then
+                  gh release delete-asset "$TAG" "$asset" --repo "$GITHUB_REPOSITORY" --yes
+                fi
+                ;;
+            esac
+          done
+
           gh release upload "$TAG" "${packages[@]}" --repo "$GITHUB_REPOSITORY" --clobber
         else
           gh release create "$TAG" "${packages[@]}" \
