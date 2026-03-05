@@ -138,7 +138,6 @@ jobs:
 
     - name: Publish to NuGet
       id: publish
-      continue-on-error: true
       run: |
         set +e
         OUTPUT=""
@@ -177,108 +176,82 @@ jobs:
     name: Create GitHub Release and Tag
     needs: publish-nuget
     runs-on: ubuntu-latest
-    if: needs.publish-nuget.outputs.published == 'true'
+    if: github.ref == 'refs/heads/main' && needs.publish-nuget.result == 'success'
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.publish-nuget.outputs.version }}
+      TAG: v${{ needs.publish-nuget.outputs.version }}
+      PACKAGES_PUBLISHED: ${{ needs.publish-nuget.outputs.published }}
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v5
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Verify GitHub CLI
+      run: gh --version
 
-    - name: Download artifacts
-      uses: actions/download-artifact@v5
-      with:
-        name: nuget-packages
-        path: ./artifacts
-
-    - name: Create and push tag
-      id: create_tag
+    - name: Resolve release state
+      id: state
+      shell: bash
       run: |
-        VERSION="${{ needs.publish-nuget.outputs.version }}"
-        TAG="v$VERSION"
+        set -euo pipefail
 
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-
-        if git rev-parse "$TAG" >/dev/null 2>&1; then
-          echo "Tag $TAG already exists"
-          echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+        if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          RELEASE_EXISTS=true
         else
-          echo "Creating tag $TAG"
-          git tag -a "$TAG" -m "Release $VERSION"
-          git push origin "$TAG"
-          echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          RELEASE_EXISTS=false
         fi
 
-    - name: Get previous tag
-      id: prev_tag
-      run: |
-        CURRENT_TAG="v${{ needs.publish-nuget.outputs.version }}"
-        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -A1 "^$CURRENT_TAG$" | tail -n1 || echo "")
-        if [ "$PREVIOUS_TAG" = "$CURRENT_TAG" ] || [ -z "$PREVIOUS_TAG" ]; then
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^$CURRENT_TAG$" | head -n1 || echo "")
+        SHOULD_SYNC=false
+        if [ "$PACKAGES_PUBLISHED" = "true" ] || [ "$RELEASE_EXISTS" != "true" ]; then
+          SHOULD_SYNC=true
         fi
-        echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
-        echo "Current tag: $CURRENT_TAG"
-        echo "Previous tag: $PREVIOUS_TAG"
 
-    - name: Generate release notes
-      id: release_notes
+        echo "release_exists=$RELEASE_EXISTS" >> "$GITHUB_OUTPUT"
+        echo "should_sync=$SHOULD_SYNC" >> "$GITHUB_OUTPUT"
+        echo "Release exists: $RELEASE_EXISTS"
+        echo "Should sync release: $SHOULD_SYNC"
+
+    - name: Download package artifacts
+      if: steps.state.outputs.should_sync == 'true'
+      shell: bash
       run: |
-        VERSION="${{ needs.publish-nuget.outputs.version }}"
-        CURRENT_TAG="v$VERSION"
-        PREVIOUS_TAG="${{ steps.prev_tag.outputs.previous_tag }}"
+        set -euo pipefail
+        mkdir -p artifacts
+        gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name nuget-packages --dir artifacts
+        find artifacts -maxdepth 2 -type f -name '*.nupkg' -print
 
-        echo "# Release $VERSION" > release_notes.md
-        echo "" >> release_notes.md
-        echo "Released on $(date +'%Y-%m-%d')" >> release_notes.md
-        echo "" >> release_notes.md
+    - name: Create or update GitHub Release
+      if: steps.state.outputs.should_sync == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
 
-        if [ -n "$PREVIOUS_TAG" ]; then
-          echo "## Changes since $PREVIOUS_TAG" >> release_notes.md
-          echo "" >> release_notes.md
+        mapfile -t packages < <(find artifacts -maxdepth 2 -type f -name '*.nupkg' | sort)
+        if [ "${#packages[@]}" -eq 0 ]; then
+          echo "No NuGet package artifacts were downloaded."
+          exit 1
+        fi
 
-          echo "### Features" >> release_notes.md
-          git log --pretty=format:"- %s (%h)" "$PREVIOUS_TAG"..HEAD --grep="^feat" --grep="^feature" >> release_notes.md || true
-          echo "" >> release_notes.md
+        NOTES=$(cat <<EOF
+        ## NuGet Packages
 
-          echo "### Bug Fixes" >> release_notes.md
-          git log --pretty=format:"- %s (%h)" "$PREVIOUS_TAG"..HEAD --grep="^fix" --grep="^bugfix" >> release_notes.md || true
-          echo "" >> release_notes.md
+        - [ManagedCode.ClaudeCodeSharpSDK v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK/$VERSION)
+        - [ManagedCode.ClaudeCodeSharpSDK.Extensions.AI v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK.Extensions.AI/$VERSION)
+        EOF
+        )
 
-          echo "### Documentation" >> release_notes.md
-          git log --pretty=format:"- %s (%h)" "$PREVIOUS_TAG"..HEAD --grep="^docs" --grep="^doc" >> release_notes.md || true
-          echo "" >> release_notes.md
-
-          echo "### Other Changes" >> release_notes.md
-          git log --pretty=format:"- %s (%h)" "$PREVIOUS_TAG"..HEAD --invert-grep --grep="^feat" --grep="^feature" --grep="^fix" --grep="^bugfix" --grep="^docs" --grep="^doc" >> release_notes.md || true
-          echo "" >> release_notes.md
+        if [ "${{ steps.state.outputs.release_exists }}" = "true" ]; then
+          gh release upload "$TAG" "${packages[@]}" --repo "$GITHUB_REPOSITORY" --clobber
         else
-          echo "## Initial Release" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### Recent Changes" >> release_notes.md
-          git log --pretty=format:"- %s (%h)" --max-count=20 >> release_notes.md
-          echo "" >> release_notes.md
+          gh release create "$TAG" "${packages[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --generate-notes \
+            --notes "$NOTES"
         fi
 
-        echo "" >> release_notes.md
-        echo "## NuGet Package" >> release_notes.md
-        echo "" >> release_notes.md
-        echo "- [ManagedCode.ClaudeCodeSharpSDK v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK/$VERSION)" >> release_notes.md
-        echo "- [ManagedCode.ClaudeCodeSharpSDK.Extensions.AI v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK.Extensions.AI/$VERSION)" >> release_notes.md
-
-        echo "" >> release_notes.md
-        echo "---" >> release_notes.md
-        echo "*This release was automatically created by GitHub Actions*" >> release_notes.md
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: v${{ needs.publish-nuget.outputs.version }}
-        name: v${{ needs.publish-nuget.outputs.version }}
-        body_path: release_notes.md
-        draft: false
-        prerelease: false
-        files: ./artifacts/*.nupkg
-        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Skip release sync
+      if: steps.state.outputs.should_sync != 'true'
+      run: echo "Release already exists and no new NuGet packages were published."
