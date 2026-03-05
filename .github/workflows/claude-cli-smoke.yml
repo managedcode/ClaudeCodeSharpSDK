@@ -1,0 +1,85 @@
+name: Claude Code CLI Smoke
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  NODE_VERSION: '22'
+
+jobs:
+  claude-cli-smoke:
+    name: Claude Code CLI Smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install Claude Code CLI
+        run: npm install --global @anthropic-ai/claude-code
+
+      - name: Verify Claude Code CLI
+        run: claude --version
+
+      - name: Verify unauthenticated Claude Code behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          sandbox="$RUNNER_TEMP/claude-empty-home"
+          output_file="$RUNNER_TEMP/claude-unauth-output.txt"
+
+          rm -rf "$sandbox"
+          mkdir -p "$sandbox/.config" "$sandbox/AppData/Roaming" "$sandbox/AppData/Local"
+
+          set +e
+          HOME="$sandbox" \
+          USERPROFILE="$sandbox" \
+          XDG_CONFIG_HOME="$sandbox/.config" \
+          APPDATA="$sandbox/AppData/Roaming" \
+          LOCALAPPDATA="$sandbox/AppData/Local" \
+          claude -p "health check" >"$output_file" 2>&1
+          exit_code=$?
+          set -e
+
+          cat "$output_file"
+
+          if [ "$exit_code" -eq 0 ]; then
+            echo "Expected unauthenticated Claude CLI invocation to fail in isolated profile."
+            exit 1
+          fi
+
+          grep -Eiq "Please run /login|Not logged in|Not authenticated|Invalid API key|claude login" "$output_file"
+
+      - name: Restore
+        run: dotnet restore ManagedCode.ClaudeCodeSharpSDK.slnx
+
+      - name: Build
+        run: dotnet build ManagedCode.ClaudeCodeSharpSDK.slnx -c Release -warnaserror --no-restore
+
+      - name: Test (full solution)
+        run: dotnet test --solution ManagedCode.ClaudeCodeSharpSDK.slnx -c Release --no-build -- --treenode-filter "/*/*/*/*[RequiresClaudeAuth!=true]"
+
+      - name: Smoke tests (ClaudeCli_Smoke subset)
+        run: dotnet test --project ClaudeCodeSharpSDK.Tests/ClaudeCodeSharpSDK.Tests.csproj -c Release --no-build -- --treenode-filter "/*/*/*/ClaudeCli_Smoke_*"

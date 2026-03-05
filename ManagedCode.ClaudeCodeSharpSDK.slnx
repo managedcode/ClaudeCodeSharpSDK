@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="ClaudeCodeSharpSDK/ClaudeCodeSharpSDK.csproj" />
+  <Project Path="ClaudeCodeSharpSDK.Extensions.AI/ClaudeCodeSharpSDK.Extensions.AI.csproj" />
+  <Project Path="ClaudeCodeSharpSDK.Tests/ClaudeCodeSharpSDK.Tests.csproj" />
+</Solution>

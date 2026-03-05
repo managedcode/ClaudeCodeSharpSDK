@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>.NET SDK for the Anthropic Claude Code CLI with streaming thread events.</Description>
+    <PackageId>ManagedCode.ClaudeCodeSharpSDK</PackageId>
+    <RootNamespace>ManagedCode.ClaudeCodeSharpSDK</RootNamespace>
+    <AssemblyName>ManagedCode.ClaudeCodeSharpSDK</AssemblyName>
+    <PackageTags>claude;anthropic;sdk;ai;agent;cli</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DotNet.ReproducibleBuilds">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

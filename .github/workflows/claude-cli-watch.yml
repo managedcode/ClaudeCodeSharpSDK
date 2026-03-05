@@ -1,0 +1,280 @@
+name: Claude Code Upstream Watch
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: claude-cli-upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  detect-and-open-issue:
+    name: Detect Claude Code Upstream Updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Detect updates in anthropics/claude-code
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SUBMODULE_PATH="submodules/anthropic-claude-code"
+          SURFACE_PATHS=(
+            "README.md"
+            "CHANGELOG.md"
+            "docs"
+            "package.json"
+            "pnpm-lock.yaml"
+            "pnpm-workspace.yaml"
+            "scripts"
+            "claude-cli"
+            "cli"
+            "src"
+            "packages"
+            "codex-cli"
+            "codex-rs"
+          )
+
+          if [ ! -d "$SUBMODULE_PATH/.git" ] && [ ! -f "$SUBMODULE_PATH/.git" ]; then
+            echo "Submodule not initialized: $SUBMODULE_PATH"
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          current_sha="$(git -C "$SUBMODULE_PATH" rev-parse HEAD)"
+          default_branch="$(git -C "$SUBMODULE_PATH" remote show origin | sed -n '/HEAD branch/s/.*: //p')"
+          if [ -z "$default_branch" ]; then
+            default_branch="main"
+          fi
+
+          git -C "$SUBMODULE_PATH" fetch origin "$default_branch" --depth=512
+          latest_sha="$(git -C "$SUBMODULE_PATH" rev-parse FETCH_HEAD)"
+
+          echo "current_sha=$current_sha" >> "$GITHUB_OUTPUT"
+          echo "latest_sha=$latest_sha" >> "$GITHUB_OUTPUT"
+          echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
+
+          if [ "$current_sha" = "$latest_sha" ]; then
+            echo "No upstream updates."
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git -C "$SUBMODULE_PATH" diff --name-only "$current_sha" "$latest_sha")"
+          if [ -z "$changed_files" ]; then
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_update=true" >> "$GITHUB_OUTPUT"
+
+          cli_changed_files="$(printf '%s\n' "$changed_files" | grep -E '^(README\.md|CHANGELOG\.md|docs/|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|scripts/|claude-cli/|cli/|src/|packages/|codex-cli/|codex-rs/)' || true)"
+          if [ -z "$cli_changed_files" ]; then
+            cli_changed_files="$(printf '%s\n' "$changed_files" | head -n 200)"
+          fi
+
+          commits="$(git -C "$SUBMODULE_PATH" log --no-merges --date=short --pretty=format:'- %h %s (%ad)' "$current_sha..$latest_sha" | head -n 100)"
+          if [ -z "$commits" ]; then
+            commits='- No commit summary available.'
+          fi
+
+          surface_diff="$(git -C "$SUBMODULE_PATH" diff --unified=0 "$current_sha" "$latest_sha" -- "${SURFACE_PATHS[@]}" || true)"
+
+          changed_flags="$(printf '%s\n' "$surface_diff" | grep -Eo -- '--[a-z0-9][a-z0-9-]*' | sort -u | head -n 200 || true)"
+          changed_models="$(printf '%s\n' "$surface_diff" | grep -Eo -- 'claude-[a-z0-9][a-z0-9.-]*' | sort -u | head -n 200 || true)"
+          changed_features="$(printf '%s\n' "$surface_diff" | grep -Eo -- 'features\.[a-zA-Z0-9_.-]+' | sed 's/^features\.//' | sort -u | head -n 200 || true)"
+
+          if [ -z "$changed_flags" ]; then
+            changed_flags='- (no CLI flag tokens detected from diff)'
+          else
+            changed_flags="$(printf '%s\n' "$changed_flags" | sed 's/^/- `/' | sed 's/$/`/')"
+          fi
+
+          if [ -z "$changed_models" ]; then
+            changed_models='- (no model tokens detected from diff)'
+          else
+            changed_models="$(printf '%s\n' "$changed_models" | sed 's/^/- `/' | sed 's/$/`/')"
+          fi
+
+          if [ -z "$changed_features" ]; then
+            changed_features='- (no feature tokens detected from diff)'
+          else
+            changed_features="$(printf '%s\n' "$changed_features" | sed 's/^/- `/' | sed 's/$/`/')"
+          fi
+
+          {
+            echo "cli_changed_files<<EOF"
+            echo "$cli_changed_files"
+            echo "EOF"
+            echo "commits<<EOF"
+            echo "$commits"
+            echo "EOF"
+            echo "changed_flags<<EOF"
+            echo "$changed_flags"
+            echo "EOF"
+            echo "changed_models<<EOF"
+            echo "$changed_models"
+            echo "EOF"
+            echo "changed_features<<EOF"
+            echo "$changed_features"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create issue for Claude Code update
+        if: steps.detect.outputs.has_update == 'true'
+        uses: actions/github-script@v7
+        env:
+          CURRENT_SHA: ${{ steps.detect.outputs.current_sha }}
+          LATEST_SHA: ${{ steps.detect.outputs.latest_sha }}
+          DEFAULT_BRANCH: ${{ steps.detect.outputs.default_branch }}
+          CLI_CHANGED_FILES: ${{ steps.detect.outputs.cli_changed_files }}
+          COMMITS: ${{ steps.detect.outputs.commits }}
+          CHANGED_FLAGS: ${{ steps.detect.outputs.changed_flags }}
+          CHANGED_MODELS: ${{ steps.detect.outputs.changed_models }}
+          CHANGED_FEATURES: ${{ steps.detect.outputs.changed_features }}
+          ASSIGNEE: ${{ vars.SDK_SYNC_ASSIGNEE != '' && vars.SDK_SYNC_ASSIGNEE || 'copilot' }}
+        with:
+          script: |
+            const currentSha = process.env.CURRENT_SHA;
+            const latestSha = process.env.LATEST_SHA;
+            const defaultBranch = process.env.DEFAULT_BRANCH;
+            const changedFilesRaw = process.env.CLI_CHANGED_FILES || '';
+            const commitsRaw = process.env.COMMITS || '';
+            const changedFlags = process.env.CHANGED_FLAGS || '- (not provided)';
+            const changedModels = process.env.CHANGED_MODELS || '- (not provided)';
+            const changedFeatures = process.env.CHANGED_FEATURES || '- (not provided)';
+            const assignee = process.env.ASSIGNEE || 'copilot';
+
+            const shortCurrent = currentSha.slice(0, 7);
+            const shortLatest = latestSha.slice(0, 7);
+            const marker = `<!-- claudecodesharpsdk-claude-code-update:${latestSha} -->`;
+            const labelName = 'claude-code-sync';
+
+            const changedFiles = changedFilesRaw
+              .split('\n')
+              .map(x => x.trim())
+              .filter(Boolean)
+              .slice(0, 200)
+              .map(x => `- \`${x}\``)
+              .join('\n');
+
+            const commits = commitsRaw.trim() || '- No commit summary available.';
+            const compareUrl = `https://github.com/anthropics/claude-code/compare/${currentSha}...${latestSha}`;
+            const latestCommitUrl = `https://github.com/anthropics/claude-code/commit/${latestSha}`;
+
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+                color: '0e8a16',
+                description: 'Tracks upstream Claude Code CLI changes from anthropics/claude-code',
+              });
+            } catch (error) {
+              core.info(`Label create skipped: ${error.message}`);
+            }
+
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: labelName,
+              per_page: 100,
+            });
+
+            const duplicate = openIssues.find(issue =>
+              !issue.pull_request && issue.body && issue.body.includes(marker)
+            );
+
+            if (duplicate) {
+              core.info(`Issue already exists for ${latestSha}: #${duplicate.number}`);
+              return;
+            }
+
+            const title = `Sync Claude Code upstream changes (${shortCurrent} -> ${shortLatest})`;
+            const body = [
+              marker,
+              '',
+              'Detected upstream updates in `anthropics/claude-code` affecting Claude Code CLI surface tracking.',
+              '',
+              'Runtime source of truth for this SDK is the real print-mode CLI contract:',
+              '- `claude -p --output-format json`',
+              '- `claude -p --output-format stream-json --verbose`',
+              '',
+              `- Submodule path: \`submodules/anthropic-claude-code\``,
+              '- Published CLI package used in CI: `@anthropic-ai/claude-code`',
+              `- Watched branch: \`${defaultBranch}\``,
+              `- Current pinned commit: \`${currentSha}\``,
+              `- Latest upstream commit: \`${latestSha}\``,
+              `- Compare: ${compareUrl}`,
+              `- Latest commit: ${latestCommitUrl}`,
+              '',
+              '## Changed files (CLI-relevant)',
+              changedFiles || '- (No file list available)',
+              '',
+              '## Potential CLI flag changes from diff',
+              changedFlags,
+              '',
+              '## Potential model changes from diff',
+              changedModels,
+              '',
+              '## Potential feature changes from diff',
+              changedFeatures,
+              '',
+              '## Commits',
+              commits,
+              '',
+              '## Action required',
+              '- [ ] Pull the new `anthropics/claude-code` submodule commit into this repository',
+              '- [ ] Validate latest `claude --help` output and representative non-interactive runtime behavior',
+              '- [ ] Re-check `claude -p --output-format json` and `claude -p --output-format stream-json --verbose` payload shape',
+              '- [ ] Sync C# SDK constants/options/models with upstream CLI changes',
+              '- [ ] Add or update tests for new flags/models/features',
+              '- [ ] Update docs (README + docs/Features + docs/Architecture if needed)',
+              '',
+              `_Opened automatically by scheduled workflow 'Claude Code Upstream Watch'._`,
+            ].join('\n');
+
+            let issue;
+            try {
+              issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [labelName],
+                assignees: [assignee],
+              });
+              core.info(`Created and assigned issue #${issue.data.number} to @${assignee}`);
+            } catch (error) {
+              core.warning(`Issue assignment failed (${error.message}), creating without assignee.`);
+              issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [labelName],
+              });
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.data.number,
+                body: `Could not auto-assign @${assignee}. Please assign manually.`,
+              });
+            }
+
+            core.info(`Issue URL: ${issue.data.html_url}`);

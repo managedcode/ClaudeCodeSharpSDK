@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>.NET Microsoft.Extensions.AI adapter for ClaudeCodeSharpSDK, providing IChatClient integration.</Description>
+    <PackageId>ManagedCode.ClaudeCodeSharpSDK.Extensions.AI</PackageId>
+    <RootNamespace>ManagedCode.ClaudeCodeSharpSDK.Extensions.AI</RootNamespace>
+    <AssemblyName>ManagedCode.ClaudeCodeSharpSDK.Extensions.AI</AssemblyName>
+    <PackageTags>claude;anthropic;sdk;ai;agent;cli;microsoft-extensions-ai;ichatclient</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DotNet.ReproducibleBuilds">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClaudeCodeSharpSDK\ClaudeCodeSharpSDK.csproj" />
+  </ItemGroup>
+</Project>
