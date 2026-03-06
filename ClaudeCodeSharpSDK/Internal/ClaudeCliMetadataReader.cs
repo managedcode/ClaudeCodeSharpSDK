@@ -7,6 +7,29 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Internal;
 
 internal static class ClaudeCliMetadataReader
 {
+    private static readonly string[] VersionSplitTokens = [Environment.NewLine, NewLine, CarriageReturn, Tab, Space];
+    private static readonly string[] LineSplitTokens = [Environment.NewLine, NewLine, CarriageReturn];
+
+    private const string Space = " ";
+    private const string Tab = "\t";
+    private const string NewLine = "\n";
+    private const string CarriageReturn = "\r";
+    private const string GitTagPrefix = "refs/tags/v";
+    private const string ExecutableExtension = ".exe";
+    private const string StartGitProcessFailedMessage = "Failed to start git process.";
+    private const string VersionOutputEmptyMessage = "Claude Code version output is empty.";
+    private const string VersionOutputParseFailedMessagePrefix = "Failed to parse Claude Code version output:";
+    private const string StartExecutableFailedMessagePrefix = "Failed to start Claude Code executable";
+    private const string ReadVersionFailedMessagePrefix = "Claude Code CLI exited with code";
+    private const string ReadVersionFailedMessageMiddle = "while reading version.";
+    private const string UpdateInstalledVersionSegment = "installed ";
+    private const string UpdateLatestVersionSegment = ", latest ";
+    private const string UpdateRunCommandSegment = ". Run ";
+    private const string VersionSeparator = ".";
+    private const string PreReleaseSeparator = "-";
+    private const string MessageQuote = "'";
+    private const string MessageSuffix = ".";
+
     private const string VersionFlag = "--version";
     private const string UpdateCommand = "claude update";
     private const string UpdateAvailableMessagePrefix = "Claude Code update is available:";
@@ -46,7 +69,7 @@ internal static class ClaudeCliMetadataReader
                 installedVersion,
                 null,
                 false,
-                $"{UpdateCheckFailedMessagePrefix} {probe.ErrorMessage}",
+                string.Concat(UpdateCheckFailedMessagePrefix, Space, probe.ErrorMessage),
                 null);
         }
 
@@ -64,7 +87,18 @@ internal static class ClaudeCliMetadataReader
             installedVersion,
             probe.LatestVersion,
             true,
-            $"{UpdateAvailableMessagePrefix} installed {installedVersion}, latest {probe.LatestVersion}. Run '{UpdateCommand}'.",
+            string.Concat(
+                UpdateAvailableMessagePrefix,
+                Space,
+                UpdateInstalledVersionSegment,
+                installedVersion,
+                UpdateLatestVersionSegment,
+                probe.LatestVersion,
+                UpdateRunCommandSegment,
+                MessageQuote,
+                UpdateCommand,
+                MessageQuote,
+                MessageSuffix),
             UpdateCommand);
     }
 
@@ -72,16 +106,17 @@ internal static class ClaudeCliMetadataReader
     {
         if (string.IsNullOrWhiteSpace(versionOutput))
         {
-            throw new InvalidOperationException("Claude Code version output is empty.");
+            throw new InvalidOperationException(VersionOutputEmptyMessage);
         }
 
         var firstToken = versionOutput.Trim()
-            .Split([Environment.NewLine, "\n", "\r", "\t", " "], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Split(VersionSplitTokens, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(firstToken))
         {
-            throw new InvalidOperationException($"Failed to parse Claude Code version output: '{versionOutput}'.");
+            throw new InvalidOperationException(
+                string.Concat(VersionOutputParseFailedMessagePrefix, Space, MessageQuote, versionOutput, MessageQuote, MessageSuffix));
         }
 
         return firstToken;
@@ -95,7 +130,7 @@ internal static class ClaudeCliMetadataReader
         }
 
         SemanticVersion? best = null;
-        foreach (var rawLine in gitOutput.Split([Environment.NewLine, "\n", "\r"], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var rawLine in gitOutput.Split(LineSplitTokens, StringSplitOptions.RemoveEmptyEntries))
         {
             var tagToken = rawLine.Split('\t', ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .LastOrDefault();
@@ -104,13 +139,12 @@ internal static class ClaudeCliMetadataReader
                 continue;
             }
 
-            const string prefix = "refs/tags/v";
-            if (!tagToken.StartsWith(prefix, StringComparison.Ordinal))
+            if (!tagToken.StartsWith(GitTagPrefix, StringComparison.Ordinal))
             {
                 continue;
             }
 
-            var versionText = tagToken[prefix.Length..];
+            var versionText = tagToken[GitTagPrefix.Length..];
             if (!TryParseSemanticVersion(versionText, out var candidate))
             {
                 continue;
@@ -294,7 +328,8 @@ internal static class ClaudeCliMetadataReader
         startInfo.ArgumentList.Add(VersionFlag);
 
         using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException($"Failed to start Claude Code executable '{executablePath}'.");
+                            ?? throw new InvalidOperationException(
+                                string.Concat(StartExecutableFailedMessagePrefix, Space, MessageQuote, executablePath, MessageQuote, MessageSuffix));
 
         var standardOutput = process.StandardOutput.ReadToEnd();
         var standardError = process.StandardError.ReadToEnd();
@@ -304,7 +339,14 @@ internal static class ClaudeCliMetadataReader
         {
             var details = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
             throw new InvalidOperationException(
-                $"Claude Code CLI exited with code {process.ExitCode} while reading version. {details}".Trim());
+                string.Concat(
+                    ReadVersionFailedMessagePrefix,
+                    Space,
+                    process.ExitCode.ToString(CultureInfo.InvariantCulture),
+                    Space,
+                    ReadVersionFailedMessageMiddle,
+                    Space,
+                    details).Trim());
         }
 
         return ParseInstalledVersion(standardOutput);
@@ -314,7 +356,7 @@ internal static class ClaudeCliMetadataReader
     {
         try
         {
-            var gitExecutable = OperatingSystem.IsWindows() ? $"{GitExecutableName}.exe" : GitExecutableName;
+            var gitExecutable = OperatingSystem.IsWindows() ? string.Concat(GitExecutableName, ExecutableExtension) : GitExecutableName;
             var startInfo = new ProcessStartInfo(gitExecutable)
             {
                 RedirectStandardOutput = true,
@@ -331,7 +373,7 @@ internal static class ClaudeCliMetadataReader
             using var process = Process.Start(startInfo);
             if (process is null)
             {
-                return (null, "Failed to start git process.");
+                return (null, StartGitProcessFailedMessage);
             }
 
             var standardOutput = process.StandardOutput.ReadToEnd();
@@ -411,10 +453,15 @@ internal static class ClaudeCliMetadataReader
     {
         public string ToNormalizedString()
         {
-            var version = $"{Major}.{Minor}.{Patch}";
+            var version = string.Concat(
+                Major.ToString(CultureInfo.InvariantCulture),
+                VersionSeparator,
+                Minor.ToString(CultureInfo.InvariantCulture),
+                VersionSeparator,
+                Patch.ToString(CultureInfo.InvariantCulture));
             if (!string.IsNullOrWhiteSpace(PreRelease))
             {
-                version += $"-{PreRelease}";
+                version += string.Concat(PreReleaseSeparator, PreRelease);
             }
 
             return version;

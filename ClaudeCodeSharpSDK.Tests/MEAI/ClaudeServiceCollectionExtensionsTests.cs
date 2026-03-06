@@ -8,6 +8,7 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Extensions.AI.Tests;
 public class ClaudeServiceCollectionExtensionsTests
 {
     private const string ConfiguredDefaultModel = "configured-default-model";
+    private const string ClaudeServiceKey = "claude";
 
     [Test]
     public async Task AddClaudeChatClient_RegistersIChatClient()
@@ -55,9 +56,9 @@ public class ClaudeServiceCollectionExtensionsTests
     public async Task AddKeyedClaudeChatClient_RegistersWithKey()
     {
         var services = new ServiceCollection();
-        services.AddKeyedClaudeChatClient("claude");
+        services.AddKeyedClaudeChatClient(ClaudeServiceKey);
         var provider = services.BuildServiceProvider();
-        var client = provider.GetKeyedService<IChatClient>("claude");
+        var client = provider.GetKeyedService<IChatClient>(ClaudeServiceKey);
         await Assert.That(client).IsNotNull();
     }
 
@@ -65,9 +66,9 @@ public class ClaudeServiceCollectionExtensionsTests
     public async Task AddKeyedClaudeChatClient_WithConfiguration_AppliesConfiguredDefaultModel()
     {
         var services = new ServiceCollection();
-        services.AddKeyedClaudeChatClient("claude", options => options.DefaultModel = ConfiguredDefaultModel);
+        services.AddKeyedClaudeChatClient(ClaudeServiceKey, options => options.DefaultModel = ConfiguredDefaultModel);
         var provider = services.BuildServiceProvider();
-        var client = provider.GetKeyedService<IChatClient>("claude");
+        var client = provider.GetKeyedService<IChatClient>(ClaudeServiceKey);
 
         await Assert.That(client).IsNotNull();
 

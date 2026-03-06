@@ -1,11 +1,15 @@
 using ManagedCode.ClaudeCodeSharpSDK.Client;
 using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Execution;
+using ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Unit;
 
 public class ClaudeClientTests
 {
+    private const string CallStartAsyncFirstMessageFragment = "Call StartAsync first";
+    private const string ExistingSessionId = "session-42";
+
     [Test]
     public async Task StartThread_WithAutoStartDisabled_Throws()
     {
@@ -13,7 +17,7 @@ public class ClaudeClientTests
             new ClaudeClientOptions
             {
                 AutoStart = false,
-                ClaudeOptions = new ClaudeOptions { ClaudeExecutablePath = "claude" },
+                ClaudeOptions = new ClaudeOptions { ClaudeExecutablePath = TestConstants.ClaudeExecutablePath },
             },
             exec: null);
 
@@ -22,7 +26,7 @@ public class ClaudeClientTests
             client.StartThread();
         }).ThrowsException();
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
-        await Assert.That(exception!.Message).Contains("Call StartAsync first");
+        await Assert.That(exception!.Message).Contains(CallStartAsyncFirstMessageFragment);
     }
 
     [Test]
@@ -32,7 +36,7 @@ public class ClaudeClientTests
             new ClaudeClientOptions
             {
                 AutoStart = true,
-                ClaudeOptions = new ClaudeOptions { ClaudeExecutablePath = "claude" },
+                ClaudeOptions = new ClaudeOptions { ClaudeExecutablePath = TestConstants.ClaudeExecutablePath },
             },
             exec: null);
 
@@ -51,17 +55,17 @@ public class ClaudeClientTests
     [Test]
     public async Task ResumeThread_SeedsExistingThreadId()
     {
-        var exec = new ClaudeExec("claude");
+        var exec = new ClaudeExec(TestConstants.ClaudeExecutablePath);
         using var client = new ClaudeClient(
             new ClaudeClientOptions
             {
                 AutoStart = true,
-                ClaudeOptions = new ClaudeOptions { ClaudeExecutablePath = "claude" },
+                ClaudeOptions = new ClaudeOptions { ClaudeExecutablePath = TestConstants.ClaudeExecutablePath },
             },
             exec);
 
-        using var thread = client.ResumeThread("session-42");
+        using var thread = client.ResumeThread(ExistingSessionId);
 
-        await Assert.That(thread.Id).IsEqualTo("session-42");
+        await Assert.That(thread.Id).IsEqualTo(ExistingSessionId);
     }
 }

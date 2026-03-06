@@ -7,6 +7,11 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Extensions.AI.Internal;
 
 internal static class ChatOptionsMapper
 {
+    private const string InvalidValueMessagePrefix = "Invalid value for Claude chat option";
+    private const string Space = " ";
+    private const string MessageQuote = "'";
+    private const string MessageSuffix = ".";
+
     internal const string WorkingDirectoryKey = "claude:working_directory";
     internal const string PermissionModeKey = "claude:permission_mode";
     internal const string AllowedToolsKey = "claude:allowed_tools";
@@ -231,6 +236,6 @@ internal static class ChatOptionsMapper
 
     private static InvalidOperationException CreateInvalidValueException(string key)
     {
-        return new InvalidOperationException($"Invalid value for Claude chat option '{key}'.");
+        return new InvalidOperationException(string.Concat(InvalidValueMessagePrefix, Space, MessageQuote, key, MessageQuote, MessageSuffix));
     }
 }

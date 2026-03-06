@@ -157,6 +157,7 @@ If no new rule is detected -> do not update the file.
 - Never add fake fallback calls/mocks in production paths; unsupported runtime cases must fail explicitly with actionable errors.
 - No magic literals: extract constants/enums/config values.
 - In SDK production code, do not inline string literals in implementation logic; promote them to named constants (paths, env vars, command names, switch/comparison tokens) for reviewability and consistency.
+- Outside constant declarations themselves, do not use inline string literals in C# code; every implementation/test string value must be routed through a named constant for consistency during review and refactoring.
 - Do not inline filesystem/path segment string literals in implementation logic; define named constants and reuse them.
 - Never override or silently mutate explicit user-provided Claude Code CLI settings (for example `web_search=disabled`); pass through user intent exactly.
 - Protocol and CLI string tokens are mandatory constants: never inline literals in parsing, mapping, or switch branches.
@@ -165,6 +166,7 @@ If no new rule is detected -> do not update the file.
 - Keep public API and naming aligned with package/namespace `ManagedCode.ClaudeCodeSharpSDK`.
 - Solution/workspace file naming must use `ManagedCode.ClaudeCodeSharpSDK` prefix for consistency with package identity.
 - Keep package/version metadata centralized in `Directory.Build.props`; avoid duplicating version structure or release metadata blocks in individual `.csproj` files unless a project-specific override is required.
+- Do not bump package/release version for PRs that only change tests or submodule-backed test/reference material and do not touch SDK production projects (`ClaudeCodeSharpSDK*` runtime code); merge/commit such changes without creating a new release version.
 - Never hardcode guessed Claude/Anthropic model names in tests, docs, or defaults; verify supported models and active default via Claude Code CLI first.
 - Before setting or changing any `Model` value, read available models and current default from the local `claude` CLI in the same environment/account and only then update code/tests/docs.
 - Model identifiers in code/tests must come from centralized constants or a shared resolver helper; do not inline model string literals repeatedly.

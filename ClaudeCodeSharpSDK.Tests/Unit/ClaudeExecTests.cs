@@ -2,157 +2,231 @@ using System.Text.Json.Nodes;
 using ManagedCode.ClaudeCodeSharpSDK.Client;
 using ManagedCode.ClaudeCodeSharpSDK.Execution;
 using ManagedCode.ClaudeCodeSharpSDK.Models;
+using ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Unit;
 
 public class ClaudeExecTests
 {
+    private const string AcceptEditsPermissionMode = "acceptEdits";
+    private const string AddDirectoryFlag = "--add-dir";
+    private const string AgentsFlag = "--agents";
+    private const string AllowedToolsFlag = "--allowed-tools";
+    private const string AnthropicApiKeyEnvironmentVariable = "ANTHROPIC_API_KEY";
+    private const string AnthropicBaseUrlEnvironmentVariable = "ANTHROPIC_BASE_URL";
+    private const string AppendPromptText = "Append prompt";
+    private const string AppendSystemPromptFlag = "--append-system-prompt";
+    private const string BaseHookValue = "base-hook";
+    private const string BashToolName = "Bash";
+    private const string BetasFlag = "--betas";
+    private const string ClaudeTestEnvironmentVariable = "CLAUDE_TEST_ENV";
+    private const string ClaudeThemeValue = "claude";
+    private const string CodeReviewerDescription = "Code reviewer";
+    private const string CustomFlag = "--custom-flag";
+    private const string DescriptionPropertyName = "Description";
+    private const string DescriptionPropertyNameCamel = "description";
+    private const string DisallowedToolsFlag = "--disallowed-tools";
+    private const string ExampleBaseUrl = "https://example.invalid";
+    private const string FeatureABeta = "feature-a";
+    private const string FeatureBBeta = "feature-b";
+    private const string FlagNotFoundMessagePrefix = "Flag '";
+    private const string FlagNotFoundMessageSuffix = "' was not found.";
+    private const string HealthCheckInput = "Health check";
+    private const string HooksKey = "hooks";
+    private const string InputFormatFlag = "--input-format";
+    private const string MaxBudgetFlag = "--max-budget-usd";
+    private const string MaxBudgetValue = "0.25";
+    private const string McpConfigFlag = "--mcp-config";
+    private const string McpConfigOne = """{"name":"one","command":"npx","args":["a","b"]}""";
+    private const string McpConfigPath = "/tmp/mcp.json";
+    private const string McpConfigTwo = """{"name":"two","command":"uvx","args":["c","d"]}""";
+    private const string ModelFlag = "--model";
+    private const string OutputFormatFlag = "--output-format";
+    private const string OutputSchemaMessageFragment = "ReplayUserMessages";
+    private const string PerTurnHookValue = "per-turn-hook";
+    private const string PermissionModeFlag = "--permission-mode";
+    private const string PluginDirectoryA = "/plugins/a";
+    private const string PluginDirectoryB = "/plugins/b";
+    private const string PluginDirectoryFlag = "--plugin-dir";
+    private const string PostHookKey = "post";
+    private const string PreHookKey = "pre";
+    private const string PresentValue = "present";
+    private const string PrintFlag = "--print";
+    private const string ReadToolName = "Read";
+    private const string RepoDirectory = "/repo";
+    private const string ReservedOutputFormatFlag = "--output-format";
+    private const string ResumeFlag = "--resume";
+    private const string ResumeSessionId = "session-1";
+    private const string ReviewerAgentKey = "reviewer";
+    private const string ReviewerPrompt = "Review code changes";
+    private const string SettingSourcesFlag = "--setting-sources";
+    private const string SettingsFlag = "--settings";
+    private const string StreamJsonOutputFormat = "stream-json";
+    private const string SummarizeDiffInput = "Summarize the diff";
+    private const string SummarizeInput = "Summarize";
+    private const string SystemPromptFlag = "--system-prompt";
+    private const string SystemPromptText = "System prompt";
+    private const string TestApiKey = "test-key";
+    private const string TextInputFormat = "text";
+    private const string ThemeKey = "theme";
+    private const string TmpDirectory = "/tmp";
+    private const string UserProjectSettingSources = "user,project";
+    private const string VerboseFlag = "--verbose";
+    private const string WriteToolName = "Write";
+    private static readonly string[] AdditionalDirectories = [RepoDirectory, TmpDirectory];
+    private static readonly string[] AllowedTools = [ReadToolName, WriteToolName];
+    private static readonly string[] BetaFlags = [FeatureABeta, FeatureBBeta];
+    private static readonly string[] McpConfigs = [McpConfigOne, McpConfigTwo];
+    private static readonly string[] PluginDirectories = [PluginDirectoryA, PluginDirectoryB];
+
     [Test]
     public async Task BuildCommandArgs_MapsClaudeFlagsAndMergedSettings()
     {
         var exec = new ClaudeExec(
-            executablePath: "claude",
+            executablePath: TestConstants.ClaudeExecutablePath,
             environmentOverride: null,
-            baseSettings: new JsonObject
-            {
-                ["theme"] = "claude",
-                ["hooks"] = new JsonObject
-                {
-                    ["pre"] = "base-hook",
-                },
-            });
+            baseSettings: CreateBaseSettings());
 
         var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
         {
-            Input = "Summarize the diff",
+            Input = SummarizeDiffInput,
             Model = ClaudeModels.ClaudeOpus45,
             PermissionMode = PermissionMode.AcceptEdits,
-            AllowedTools = ["Read", "Write"],
-            DisallowedTools = ["Bash"],
-            AdditionalDirectories = ["/repo", "/tmp"],
-            McpConfigs = ["/tmp/mcp.json"],
-            SystemPrompt = "System prompt",
-            AppendSystemPrompt = "Append prompt",
-            ResumeSessionId = "session-1",
+            AllowedTools = AllowedTools,
+            DisallowedTools = [BashToolName],
+            AdditionalDirectories = AdditionalDirectories,
+            McpConfigs = [McpConfigPath],
+            SystemPrompt = SystemPromptText,
+            AppendSystemPrompt = AppendPromptText,
+            ResumeSessionId = ResumeSessionId,
             MaxBudgetUsd = 0.25m,
             SettingSources = [SettingSource.User, SettingSource.Project],
-            PluginDirectories = ["/plugins/a", "/plugins/b"],
+            PluginDirectories = PluginDirectories,
             InlineAgents = new Dictionary<string, InlineAgentDefinition>(StringComparer.Ordinal)
             {
-                ["reviewer"] = new("Code reviewer", "Review code changes"),
+                [ReviewerAgentKey] = new(CodeReviewerDescription, ReviewerPrompt),
             },
-            Settings = new JsonObject
-            {
-                ["hooks"] = new JsonObject
-                {
-                    ["post"] = "per-turn-hook",
-                },
-            },
-            AdditionalCliArguments = ["--custom-flag"],
+            Settings = CreateTurnSettings(),
+            AdditionalCliArguments = [CustomFlag],
         });
 
-        await Assert.That(commandArgs[0]).IsEqualTo("--print");
-        await Assert.That(commandArgs[1]).IsEqualTo("--output-format");
-        await Assert.That(commandArgs[2]).IsEqualTo("stream-json");
-        await Assert.That(commandArgs[3]).IsEqualTo("--input-format");
-        await Assert.That(commandArgs[4]).IsEqualTo("text");
-        await Assert.That(commandArgs[5]).IsEqualTo("--verbose");
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--model")).IsEqualTo(ClaudeModels.ClaudeOpus45);
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--permission-mode")).IsEqualTo("acceptEdits");
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--allowed-tools")).IsEqualTo("Read,Write");
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--disallowed-tools")).IsEqualTo("Bash");
-        await Assert.That(GetAllFlagValues(commandArgs, "--add-dir")).IsEquivalentTo(["/repo", "/tmp"]);
-        await Assert.That(GetAllFlagValues(commandArgs, "--mcp-config")).IsEquivalentTo(["/tmp/mcp.json"]);
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--system-prompt")).IsEqualTo("System prompt");
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--append-system-prompt")).IsEqualTo("Append prompt");
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--resume")).IsEqualTo("session-1");
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--max-budget-usd")).IsEqualTo("0.25");
-        await Assert.That(GetRequiredFlagValue(commandArgs, "--setting-sources")).IsEqualTo("user,project");
-        await Assert.That(GetAllFlagValues(commandArgs, "--plugin-dir")).IsEquivalentTo(["/plugins/a", "/plugins/b"]);
-        await Assert.That(commandArgs[^1]).IsEqualTo("--custom-flag");
+        await Assert.That(commandArgs[0]).IsEqualTo(PrintFlag);
+        await Assert.That(commandArgs[1]).IsEqualTo(OutputFormatFlag);
+        await Assert.That(commandArgs[2]).IsEqualTo(StreamJsonOutputFormat);
+        await Assert.That(commandArgs[3]).IsEqualTo(InputFormatFlag);
+        await Assert.That(commandArgs[4]).IsEqualTo(TextInputFormat);
+        await Assert.That(commandArgs[5]).IsEqualTo(VerboseFlag);
+        await Assert.That(GetRequiredFlagValue(commandArgs, ModelFlag)).IsEqualTo(ClaudeModels.ClaudeOpus45);
+        await Assert.That(GetRequiredFlagValue(commandArgs, PermissionModeFlag)).IsEqualTo(AcceptEditsPermissionMode);
+        await Assert.That(GetRequiredFlagValue(commandArgs, AllowedToolsFlag)).IsEqualTo(string.Join(',', AllowedTools));
+        await Assert.That(GetRequiredFlagValue(commandArgs, DisallowedToolsFlag)).IsEqualTo(BashToolName);
+        await Assert.That(GetAllFlagValues(commandArgs, AddDirectoryFlag)).IsEquivalentTo(AdditionalDirectories);
+        await Assert.That(GetAllFlagValues(commandArgs, McpConfigFlag)).IsEquivalentTo([McpConfigPath]);
+        await Assert.That(GetRequiredFlagValue(commandArgs, SystemPromptFlag)).IsEqualTo(SystemPromptText);
+        await Assert.That(GetRequiredFlagValue(commandArgs, AppendSystemPromptFlag)).IsEqualTo(AppendPromptText);
+        await Assert.That(GetRequiredFlagValue(commandArgs, ResumeFlag)).IsEqualTo(ResumeSessionId);
+        await Assert.That(GetRequiredFlagValue(commandArgs, MaxBudgetFlag)).IsEqualTo(MaxBudgetValue);
+        await Assert.That(GetRequiredFlagValue(commandArgs, SettingSourcesFlag)).IsEqualTo(UserProjectSettingSources);
+        await Assert.That(GetAllFlagValues(commandArgs, PluginDirectoryFlag)).IsEquivalentTo(PluginDirectories);
+        await Assert.That(commandArgs[^1]).IsEqualTo(CustomFlag);
 
-        var settings = JsonNode.Parse(GetRequiredFlagValue(commandArgs, "--settings"))!.AsObject();
-        await Assert.That(settings["theme"]!.GetValue<string>()).IsEqualTo("claude");
-        await Assert.That(settings["hooks"]!["pre"]!.GetValue<string>()).IsEqualTo("base-hook");
-        await Assert.That(settings["hooks"]!["post"]!.GetValue<string>()).IsEqualTo("per-turn-hook");
+        var settings = JsonNode.Parse(GetRequiredFlagValue(commandArgs, SettingsFlag))!.AsObject();
+        await Assert.That(settings[ThemeKey]!.GetValue<string>()).IsEqualTo(ClaudeThemeValue);
+        await Assert.That(settings[HooksKey]![PreHookKey]!.GetValue<string>()).IsEqualTo(BaseHookValue);
+        await Assert.That(settings[HooksKey]![PostHookKey]!.GetValue<string>()).IsEqualTo(PerTurnHookValue);
 
-        var agents = JsonNode.Parse(GetRequiredFlagValue(commandArgs, "--agents"))!.AsObject();
-        var reviewer = agents["reviewer"]!.AsObject();
-        var description = reviewer["Description"]?.GetValue<string>() ?? reviewer["description"]?.GetValue<string>();
-        await Assert.That(description).IsEqualTo("Code reviewer");
+        var agents = JsonNode.Parse(GetRequiredFlagValue(commandArgs, AgentsFlag))!.AsObject();
+        var reviewer = agents[ReviewerAgentKey]!.AsObject();
+        var description = reviewer[DescriptionPropertyName]?.GetValue<string>() ?? reviewer[DescriptionPropertyNameCamel]?.GetValue<string>();
+        await Assert.That(description).IsEqualTo(CodeReviewerDescription);
     }
 
     [Test]
     public async Task BuildCommandArgs_RepeatsVarArgFlagsWithoutCommaPacking()
     {
-        var exec = new ClaudeExec(executablePath: "claude");
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
 
         var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
         {
-            Input = "Health check",
-            AdditionalDirectories = ["/repo", "/tmp"],
-            McpConfigs =
-            [
-                """{"name":"one","command":"npx","args":["a","b"]}""",
-                """{"name":"two","command":"uvx","args":["c","d"]}""",
-            ],
-            Betas = ["feature-a", "feature-b"],
+            Input = HealthCheckInput,
+            AdditionalDirectories = AdditionalDirectories,
+            McpConfigs = McpConfigs,
+            Betas = BetaFlags,
         });
 
-        await Assert.That(GetAllFlagValues(commandArgs, "--add-dir")).IsEquivalentTo(["/repo", "/tmp"]);
-        await Assert.That(GetAllFlagValues(commandArgs, "--mcp-config")).IsEquivalentTo(
-            [
-                """{"name":"one","command":"npx","args":["a","b"]}""",
-                """{"name":"two","command":"uvx","args":["c","d"]}""",
-            ]);
-        await Assert.That(GetAllFlagValues(commandArgs, "--betas")).IsEquivalentTo(["feature-a", "feature-b"]);
+        await Assert.That(GetAllFlagValues(commandArgs, AddDirectoryFlag)).IsEquivalentTo(AdditionalDirectories);
+        await Assert.That(GetAllFlagValues(commandArgs, McpConfigFlag)).IsEquivalentTo(McpConfigs);
+        await Assert.That(GetAllFlagValues(commandArgs, BetasFlag)).IsEquivalentTo(BetaFlags);
     }
 
     [Test]
     public async Task BuildEnvironment_IncludesAnthropicOverrides()
     {
         var exec = new ClaudeExec(
-            executablePath: "claude",
+            executablePath: TestConstants.ClaudeExecutablePath,
             environmentOverride: new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["CLAUDE_TEST_ENV"] = "present",
+                [ClaudeTestEnvironmentVariable] = PresentValue,
             });
 
-        var environment = exec.BuildEnvironment("https://example.invalid", "test-key");
+        var environment = exec.BuildEnvironment(ExampleBaseUrl, TestApiKey);
 
-        await Assert.That(environment["CLAUDE_TEST_ENV"]).IsEqualTo("present");
-        await Assert.That(environment["ANTHROPIC_BASE_URL"]).IsEqualTo("https://example.invalid");
-        await Assert.That(environment["ANTHROPIC_API_KEY"]).IsEqualTo("test-key");
+        await Assert.That(environment[ClaudeTestEnvironmentVariable]).IsEqualTo(PresentValue);
+        await Assert.That(environment[AnthropicBaseUrlEnvironmentVariable]).IsEqualTo(ExampleBaseUrl);
+        await Assert.That(environment[AnthropicApiKeyEnvironmentVariable]).IsEqualTo(TestApiKey);
     }
 
     [Test]
     public async Task BuildCommandArgs_WithReplayUserMessages_ThrowsUntilStreamJsonInputIsSupported()
     {
-        var exec = new ClaudeExec(executablePath: "claude");
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
 
         var exception = await Assert.That(() => exec.BuildCommandArgs(new ClaudeExecArgs
         {
-            Input = "Summarize",
+            Input = SummarizeInput,
             ReplayUserMessages = true,
         })).ThrowsException();
 
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
-        await Assert.That(exception!.Message).Contains("ReplayUserMessages");
+        await Assert.That(exception!.Message).Contains(OutputSchemaMessageFragment);
     }
 
     [Test]
     public async Task BuildCommandArgs_WithReservedAdditionalCliFlag_Throws()
     {
-        var exec = new ClaudeExec(executablePath: "claude");
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
 
         var exception = await Assert.That(() => exec.BuildCommandArgs(new ClaudeExecArgs
         {
-            Input = "Summarize",
-            AdditionalCliArguments = ["--output-format", "text"],
+            Input = SummarizeInput,
+            AdditionalCliArguments = [ReservedOutputFormatFlag, TextInputFormat],
         })).ThrowsException();
 
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
-        await Assert.That(exception!.Message).Contains("--output-format");
+        await Assert.That(exception!.Message).Contains(ReservedOutputFormatFlag);
+    }
+
+    private static JsonObject CreateBaseSettings()
+    {
+        return new JsonObject
+        {
+            [ThemeKey] = ClaudeThemeValue,
+            [HooksKey] = new JsonObject
+            {
+                [PreHookKey] = BaseHookValue,
+            },
+        };
+    }
+
+    private static JsonObject CreateTurnSettings()
+    {
+        return new JsonObject
+        {
+            [HooksKey] = new JsonObject
+            {
+                [PostHookKey] = PerTurnHookValue,
+            },
+        };
     }
 
     private static string GetRequiredFlagValue(IReadOnlyList<string> commandArgs, string flag)
@@ -160,7 +234,7 @@ public class ClaudeExecTests
         var index = FindFlagIndex(commandArgs, flag);
         if (index < 0 || index == commandArgs.Count - 1)
         {
-            throw new InvalidOperationException($"Flag '{flag}' was not found.");
+            throw new InvalidOperationException(string.Concat(FlagNotFoundMessagePrefix, flag, FlagNotFoundMessageSuffix));
         }
 
         return commandArgs[index + 1];

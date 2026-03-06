@@ -6,18 +6,30 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Extensions.AI.Tests;
 
 public class StreamingEventMapperTests
 {
+    private const string ThreadId = "thread-1";
+    private const string MessageId = "msg-1";
+    private const string AssistantText = "Hello";
+    private const string StopReason = "end_turn";
+    private const string AuthenticationFailedMessage = "authentication failed";
+    private const string WorkspaceDirectory = "/workspace";
+    private const string DefaultPermissionMode = "default";
+    private const string CliVersion = "2.0.75";
+    private const string DefaultOutputStyle = "default";
+    private const string NoneCostMode = "none";
+    private const string AllowedToolRead = "Read";
+
     [Test]
     public async Task ToUpdates_MapsThreadStartAssistantMessageAndUsage()
     {
         var updates = await CollectUpdates(
             ToAsyncEnumerable(
-                CreateThreadStartedEvent("thread-1"),
-                new ItemCompletedEvent(new AssistantMessageItem("msg-1", "claude-sonnet-4-5", "Hello", [], null, "end_turn", null)),
-                new TurnCompletedEvent(new Usage(10, 2, 3, 4), "Hello", null, null, null, 1)));
+                CreateThreadStartedEvent(ThreadId),
+                new ItemCompletedEvent(new AssistantMessageItem(MessageId, ClaudeModels.ClaudeSonnet45Alias, AssistantText, [], null, StopReason, null)),
+                new TurnCompletedEvent(new Usage(10, 2, 3, 4), AssistantText, null, null, null, 1)));
 
         await Assert.That(updates.Count).IsEqualTo(3);
-        await Assert.That(updates[0].ConversationId).IsEqualTo("thread-1");
-        await Assert.That(updates[1].Text).IsEqualTo("Hello");
+        await Assert.That(updates[0].ConversationId).IsEqualTo(ThreadId);
+        await Assert.That(updates[1].Text).IsEqualTo(AssistantText);
         await Assert.That(updates[1].Role).IsEqualTo(ChatRole.Assistant);
 
         var usageContent = updates[2].Contents.OfType<UsageContent>().Single();
@@ -31,24 +43,24 @@ public class StreamingEventMapperTests
     public async Task ToUpdates_TurnFailed_ThrowsInvalidOperationException()
     {
         var exception = await Assert.That(async () =>
-                await CollectUpdates(ToAsyncEnumerable(new TurnFailedEvent(new ThreadError("authentication failed")))))
+                await CollectUpdates(ToAsyncEnumerable(new TurnFailedEvent(new ThreadError(AuthenticationFailedMessage)))))
             .ThrowsException();
 
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
-        await Assert.That(exception!.Message).Contains("authentication failed");
+        await Assert.That(exception!.Message).Contains(AuthenticationFailedMessage);
     }
 
     private static ThreadStartedEvent CreateThreadStartedEvent(string sessionId)
     {
         return new ThreadStartedEvent(new SessionInfo(
             sessionId,
-            "/workspace",
+            WorkspaceDirectory,
             ClaudeModels.Sonnet,
-            "default",
-            "2.0.75",
-            "default",
-            "none",
-            ["Read"],
+            DefaultPermissionMode,
+            CliVersion,
+            DefaultOutputStyle,
+            NoneCostMode,
+            [AllowedToolRead],
             [],
             [],
             [],

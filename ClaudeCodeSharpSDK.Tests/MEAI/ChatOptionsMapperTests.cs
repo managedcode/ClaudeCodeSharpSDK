@@ -8,15 +8,37 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Extensions.AI.Tests;
 
 public class ChatOptionsMapperTests
 {
+    private const string TemporaryWorkspace = "/tmp/workspace";
+    private const string RepositoryWorkspace = "/workspace";
+    private const string AllowedToolRead = "Read";
+    private const string AllowedToolWrite = "Write";
+    private const string DisallowedToolBash = "Bash";
+    private const string BlankToolEntry = "  ";
+    private const string UseTerseAnswers = "Use terse answers";
+    private const string AlwaysIncludeFilePaths = "Always include file paths";
+    private const string AcceptEditsPermission = "acceptEdits";
+    private const string AllowedToolsCsv = "Read, Write";
+    private const string InvalidPermissionMode = "invalid-mode";
+    private const string StayPrecise = "Stay precise";
+    private const string ShowFilePaths = "Show file paths";
+    private const string CwdPropertyName = "cwd";
+    private const string PermissionPropertyName = "permission";
+    private const string AllowedPropertyName = "allowed";
+    private const string DeniedPropertyName = "denied";
+    private const string SystemPropertyName = "system";
+    private const string AppendPropertyName = "append";
+    private const string BudgetPropertyName = "budget";
+    private const string JsonAdditionalProperties = "{\"cwd\":\"/workspace\",\"permission\":\"acceptEdits\",\"allowed\":[\"Read\",\"Write\"],\"denied\":[\"Bash\"],\"system\":\"Stay precise\",\"append\":\"Show file paths\",\"budget\":1.5}";
+
     [Test]
     public async Task ToThreadOptions_PrefersChatModelIdOverDefaults()
     {
-        var chatOptions = new ChatOptions { ModelId = "claude-opus-4-5" };
+        var chatOptions = new ChatOptions { ModelId = ClaudeModels.ClaudeOpus45 };
         var clientOptions = new ClaudeChatClientOptions { DefaultModel = ClaudeModels.Sonnet };
 
         var result = ChatOptionsMapper.ToThreadOptions(chatOptions, clientOptions);
 
-        await Assert.That(result.Model).IsEqualTo("claude-opus-4-5");
+        await Assert.That(result.Model).IsEqualTo(ClaudeModels.ClaudeOpus45);
     }
 
     [Test]
@@ -26,24 +48,24 @@ public class ChatOptionsMapperTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                [ChatOptionsMapper.WorkingDirectoryKey] = "/tmp/workspace",
+                [ChatOptionsMapper.WorkingDirectoryKey] = TemporaryWorkspace,
                 [ChatOptionsMapper.PermissionModeKey] = PermissionMode.AcceptEdits,
-                [ChatOptionsMapper.AllowedToolsKey] = new[] { "Read", "Write" },
-                [ChatOptionsMapper.DisallowedToolsKey] = new[] { "Bash" },
-                [ChatOptionsMapper.SystemPromptKey] = "Use terse answers",
-                [ChatOptionsMapper.AppendSystemPromptKey] = "Always include file paths",
+                [ChatOptionsMapper.AllowedToolsKey] = new[] { AllowedToolRead, AllowedToolWrite },
+                [ChatOptionsMapper.DisallowedToolsKey] = new[] { DisallowedToolBash },
+                [ChatOptionsMapper.SystemPromptKey] = UseTerseAnswers,
+                [ChatOptionsMapper.AppendSystemPromptKey] = AlwaysIncludeFilePaths,
                 [ChatOptionsMapper.MaxBudgetUsdKey] = 0.25m,
             },
         };
 
         var result = ChatOptionsMapper.ToThreadOptions(chatOptions, new ClaudeChatClientOptions());
 
-        await Assert.That(result.WorkingDirectory).IsEqualTo("/tmp/workspace");
+        await Assert.That(result.WorkingDirectory).IsEqualTo(TemporaryWorkspace);
         await Assert.That(result.PermissionMode).IsEqualTo(PermissionMode.AcceptEdits);
-        await Assert.That(result.AllowedTools).IsEquivalentTo(["Read", "Write"]);
-        await Assert.That(result.DisallowedTools).IsEquivalentTo(["Bash"]);
-        await Assert.That(result.SystemPrompt).IsEqualTo("Use terse answers");
-        await Assert.That(result.AppendSystemPrompt).IsEqualTo("Always include file paths");
+        await Assert.That(result.AllowedTools).IsEquivalentTo([AllowedToolRead, AllowedToolWrite]);
+        await Assert.That(result.DisallowedTools).IsEquivalentTo([DisallowedToolBash]);
+        await Assert.That(result.SystemPrompt).IsEqualTo(UseTerseAnswers);
+        await Assert.That(result.AppendSystemPrompt).IsEqualTo(AlwaysIncludeFilePaths);
         await Assert.That(result.MaxBudgetUsd).IsEqualTo(0.25m);
     }
 
@@ -54,9 +76,9 @@ public class ChatOptionsMapperTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                [ChatOptionsMapper.PermissionModeKey] = "acceptEdits",
-                [ChatOptionsMapper.AllowedToolsKey] = "Read, Write",
-                [ChatOptionsMapper.DisallowedToolsKey] = new List<string> { "Bash", "  " },
+                [ChatOptionsMapper.PermissionModeKey] = AcceptEditsPermission,
+                [ChatOptionsMapper.AllowedToolsKey] = AllowedToolsCsv,
+                [ChatOptionsMapper.DisallowedToolsKey] = new List<string> { DisallowedToolBash, BlankToolEntry },
                 [ChatOptionsMapper.MaxBudgetUsdKey] = 0.5d,
             },
         };
@@ -64,8 +86,8 @@ public class ChatOptionsMapperTests
         var result = ChatOptionsMapper.ToThreadOptions(chatOptions, new ClaudeChatClientOptions());
 
         await Assert.That(result.PermissionMode).IsEqualTo(PermissionMode.AcceptEdits);
-        await Assert.That(result.AllowedTools).IsEquivalentTo(["Read", "Write"]);
-        await Assert.That(result.DisallowedTools).IsEquivalentTo(["Bash"]);
+        await Assert.That(result.AllowedTools).IsEquivalentTo([AllowedToolRead, AllowedToolWrite]);
+        await Assert.That(result.DisallowedTools).IsEquivalentTo([DisallowedToolBash]);
         await Assert.That(result.MaxBudgetUsd).IsEqualTo(0.5m);
     }
 
@@ -76,7 +98,7 @@ public class ChatOptionsMapperTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                [ChatOptionsMapper.PermissionModeKey] = "invalid-mode",
+                [ChatOptionsMapper.PermissionModeKey] = InvalidPermissionMode,
             },
         };
 
@@ -100,42 +122,31 @@ public class ChatOptionsMapperTests
     [Test]
     public async Task ToThreadOptions_ParsesJsonAndNumericAdditionalProperties()
     {
-        using var json = JsonDocument.Parse(
-            """
-            {
-              "cwd": "/workspace",
-              "permission": "acceptEdits",
-              "allowed": ["Read", "Write"],
-              "denied": ["Bash"],
-              "system": "Stay precise",
-              "append": "Show file paths",
-              "budget": 1.5
-            }
-            """);
+        using var json = JsonDocument.Parse(JsonAdditionalProperties);
 
         var root = json.RootElement;
         var chatOptions = new ChatOptions
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                [ChatOptionsMapper.WorkingDirectoryKey] = root.GetProperty("cwd").Clone(),
-                [ChatOptionsMapper.PermissionModeKey] = root.GetProperty("permission").Clone(),
-                [ChatOptionsMapper.AllowedToolsKey] = root.GetProperty("allowed").Clone(),
-                [ChatOptionsMapper.DisallowedToolsKey] = root.GetProperty("denied").Clone(),
-                [ChatOptionsMapper.SystemPromptKey] = root.GetProperty("system").Clone(),
-                [ChatOptionsMapper.AppendSystemPromptKey] = root.GetProperty("append").Clone(),
-                [ChatOptionsMapper.MaxBudgetUsdKey] = root.GetProperty("budget").Clone(),
+                [ChatOptionsMapper.WorkingDirectoryKey] = root.GetProperty(CwdPropertyName).Clone(),
+                [ChatOptionsMapper.PermissionModeKey] = root.GetProperty(PermissionPropertyName).Clone(),
+                [ChatOptionsMapper.AllowedToolsKey] = root.GetProperty(AllowedPropertyName).Clone(),
+                [ChatOptionsMapper.DisallowedToolsKey] = root.GetProperty(DeniedPropertyName).Clone(),
+                [ChatOptionsMapper.SystemPromptKey] = root.GetProperty(SystemPropertyName).Clone(),
+                [ChatOptionsMapper.AppendSystemPromptKey] = root.GetProperty(AppendPropertyName).Clone(),
+                [ChatOptionsMapper.MaxBudgetUsdKey] = root.GetProperty(BudgetPropertyName).Clone(),
             },
         };
 
         var result = ChatOptionsMapper.ToThreadOptions(chatOptions, new ClaudeChatClientOptions());
 
-        await Assert.That(result.WorkingDirectory).IsEqualTo("/workspace");
+        await Assert.That(result.WorkingDirectory).IsEqualTo(RepositoryWorkspace);
         await Assert.That(result.PermissionMode).IsEqualTo(PermissionMode.AcceptEdits);
-        await Assert.That(result.AllowedTools).IsEquivalentTo(["Read", "Write"]);
-        await Assert.That(result.DisallowedTools).IsEquivalentTo(["Bash"]);
-        await Assert.That(result.SystemPrompt).IsEqualTo("Stay precise");
-        await Assert.That(result.AppendSystemPrompt).IsEqualTo("Show file paths");
+        await Assert.That(result.AllowedTools).IsEquivalentTo([AllowedToolRead, AllowedToolWrite]);
+        await Assert.That(result.DisallowedTools).IsEquivalentTo([DisallowedToolBash]);
+        await Assert.That(result.SystemPrompt).IsEqualTo(StayPrecise);
+        await Assert.That(result.AppendSystemPrompt).IsEqualTo(ShowFilePaths);
         await Assert.That(result.MaxBudgetUsd).IsEqualTo(1.5m);
     }
 }

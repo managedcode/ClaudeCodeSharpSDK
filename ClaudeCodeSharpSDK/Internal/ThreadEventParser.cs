@@ -6,6 +6,14 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Internal;
 
 internal static class ThreadEventParser
 {
+    private const string ErrorEventDefaultMessage = "Claude Code emitted an error event.";
+    private const string ParagraphSeparator = "\n\n";
+    private const string MissingRequiredPropertyMessagePrefix = "Missing required property";
+    private const string MissingRequiredStringPropertyMessagePrefix = "Missing required string property";
+    private const string Space = " ";
+    private const string MessageQuote = "'";
+    private const string MessageSuffix = ".";
+
     public static ThreadEvent Parse(string line)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(line);
@@ -22,7 +30,7 @@ internal static class ThreadEventParser
             ClaudeProtocolConstants.EventTypes.Result => ParseResult(root),
             ClaudeProtocolConstants.EventTypes.Error => new ThreadErrorEvent(GetOptionalString(root, ClaudeProtocolConstants.Properties.Error)
                                                                             ?? GetOptionalString(root, ClaudeProtocolConstants.Properties.Result)
-                                                                            ?? "Claude Code emitted an error event."),
+                                                                            ?? ErrorEventDefaultMessage),
             _ => new UnknownEvent(type, JsonNode.Parse(root.GetRawText()) ?? new JsonObject()),
         };
     }
@@ -151,7 +159,7 @@ internal static class ThreadEventParser
     private static string ExtractText(IReadOnlyList<MessageContentBlock> content)
     {
         return string.Join(
-            "\n\n",
+            ParagraphSeparator,
             content.Where(static block => !string.IsNullOrWhiteSpace(block.Text))
                 .Select(static block => block.Text));
     }
@@ -179,7 +187,8 @@ internal static class ThreadEventParser
     {
         if (!element.TryGetProperty(property, out var result))
         {
-            throw new InvalidOperationException($"Missing required property '{property}'.");
+            throw new InvalidOperationException(
+                string.Concat(MissingRequiredPropertyMessagePrefix, Space, MessageQuote, property, MessageQuote, MessageSuffix));
         }
 
         return result;
@@ -190,7 +199,8 @@ internal static class ThreadEventParser
         var value = GetOptionalString(element, property);
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidOperationException($"Missing required string property '{property}'.");
+            throw new InvalidOperationException(
+                string.Concat(MissingRequiredStringPropertyMessagePrefix, Space, MessageQuote, property, MessageQuote, MessageSuffix));
         }
 
         return value;

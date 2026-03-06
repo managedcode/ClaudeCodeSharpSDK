@@ -1,9 +1,20 @@
 using ManagedCode.ClaudeCodeSharpSDK.Internal;
+using ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Unit;
 
 public class ClaudeCliLocatorTests
 {
+    private const string AnthropicScopeDirectory = "@anthropic-ai";
+    private const string CustomOverridePath = "/tmp/custom-claude";
+    private const string FirstPathEntryName = "first";
+    private const string GuidFormat = "N";
+    private const string NodeModulesDirectory = "node_modules";
+    private const string PackageDirectory = "claude-code";
+    private const string SandboxPrefix = "ClaudeCliLocatorTests-";
+    private const string SecondPathEntryName = "second";
+    private const string UnixPathEntryName = "unix";
+
     [Test]
     public async Task GetPathExecutableCandidates_Windows_IncludeCommandWrappers()
     {
@@ -25,13 +36,13 @@ public class ClaudeCliLocatorTests
 
         try
         {
-            var firstPathEntry = Path.Combine(sandboxDirectory, "first");
-            var secondPathEntry = Path.Combine(sandboxDirectory, "second");
+            var firstPathEntry = Path.Combine(sandboxDirectory, FirstPathEntryName);
+            var secondPathEntry = Path.Combine(sandboxDirectory, SecondPathEntryName);
             Directory.CreateDirectory(firstPathEntry);
             Directory.CreateDirectory(secondPathEntry);
 
             var cmdPath = Path.Combine(secondPathEntry, ClaudeCliLocator.ClaudeWindowsCommandName);
-            await File.WriteAllTextAsync(cmdPath, "@echo off");
+            await File.WriteAllTextAsync(cmdPath, TestConstants.EchoOffScript);
 
             var pathVariable = string.Join(Path.PathSeparator, firstPathEntry, secondPathEntry);
 
@@ -52,14 +63,14 @@ public class ClaudeCliLocatorTests
 
         try
         {
-            var pathEntry = Path.Combine(sandboxDirectory, "unix");
+            var pathEntry = Path.Combine(sandboxDirectory, UnixPathEntryName);
             Directory.CreateDirectory(pathEntry);
 
-            await File.WriteAllTextAsync(Path.Combine(pathEntry, ClaudeCliLocator.ClaudeWindowsCommandName), "#!/usr/bin/env bash");
+            await File.WriteAllTextAsync(Path.Combine(pathEntry, ClaudeCliLocator.ClaudeWindowsCommandName), TestConstants.BashShebang);
 
             var resolved = ClaudeCliLocator.TryResolvePathExecutable(pathEntry, isWindows: false, out var executablePath);
             await Assert.That(resolved).IsFalse();
-            await Assert.That(executablePath).IsEqualTo(string.Empty);
+            await Assert.That(executablePath).IsEqualTo(TestConstants.EmptyString);
         }
         finally
         {
@@ -70,11 +81,9 @@ public class ClaudeCliLocatorTests
     [Test]
     public async Task FindClaudePath_ReturnsOverrideWithoutFurtherResolution()
     {
-        const string overridePath = "/tmp/custom-claude";
+        var resolved = ClaudeCliLocator.FindClaudePath(CustomOverridePath);
 
-        var resolved = ClaudeCliLocator.FindClaudePath(overridePath);
-
-        await Assert.That(resolved).IsEqualTo(overridePath);
+        await Assert.That(resolved).IsEqualTo(CustomOverridePath);
     }
 
     [Test]
@@ -86,16 +95,16 @@ public class ClaudeCliLocatorTests
         {
             var packageDirectory = Path.Combine(
                 sandboxDirectory,
-                "node_modules",
-                "@anthropic-ai",
-                "claude-code");
+                NodeModulesDirectory,
+                AnthropicScopeDirectory,
+                PackageDirectory);
             Directory.CreateDirectory(packageDirectory);
-            await File.WriteAllTextAsync(Path.Combine(packageDirectory, "cli.js"), "#!/usr/bin/env node");
+            await File.WriteAllTextAsync(Path.Combine(packageDirectory, TestConstants.CliJsFileName), TestConstants.NodeShebang);
 
             var resolved = ClaudeCliLocator.TryResolveNodeModulesBinary([sandboxDirectory], isWindows: true, out var executablePath);
 
             await Assert.That(resolved).IsFalse();
-            await Assert.That(executablePath).IsEqualTo(string.Empty);
+            await Assert.That(executablePath).IsEqualTo(TestConstants.EmptyString);
         }
         finally
         {
@@ -112,12 +121,12 @@ public class ClaudeCliLocatorTests
         {
             var packageDirectory = Path.Combine(
                 sandboxDirectory,
-                "node_modules",
-                "@anthropic-ai",
-                "claude-code");
+                NodeModulesDirectory,
+                AnthropicScopeDirectory,
+                PackageDirectory);
             Directory.CreateDirectory(packageDirectory);
-            var cliPath = Path.Combine(packageDirectory, "cli.js");
-            await File.WriteAllTextAsync(cliPath, "#!/usr/bin/env node");
+            var cliPath = Path.Combine(packageDirectory, TestConstants.CliJsFileName);
+            await File.WriteAllTextAsync(cliPath, TestConstants.NodeShebang);
 
             var resolved = ClaudeCliLocator.TryResolveNodeModulesBinary([sandboxDirectory], isWindows: false, out var executablePath);
 
@@ -134,9 +143,9 @@ public class ClaudeCliLocatorTests
     {
         var sandboxDirectory = Path.Combine(
             Environment.CurrentDirectory,
-            "tests",
-            ".sandbox",
-            $"ClaudeCliLocatorTests-{Guid.NewGuid():N}");
+            TestConstants.TestsDirectoryName,
+            TestConstants.SandboxDirectoryName,
+            string.Concat(SandboxPrefix, Guid.NewGuid().ToString(GuidFormat)));
         Directory.CreateDirectory(sandboxDirectory);
         return sandboxDirectory;
     }

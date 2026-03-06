@@ -40,6 +40,7 @@ Keep package quality and upstream Claude Code CLI parity automatically verified 
 - Release workflow must build/test before pack/publish.
 - Release workflow must read package version from `Directory.Build.props`.
 - Release workflow must validate semantic version format before packaging.
+- Test-only PRs, including PRs that only adjust submodule-backed upstream reference/tests and do not change SDK production code, must not trigger a package version bump; those changes are committed without creating a new release version.
 - Release workflow must pack and publish both NuGet packages:
   - `ManagedCode.ClaudeCodeSharpSDK`
   - `ManagedCode.ClaudeCodeSharpSDK.Extensions.AI`

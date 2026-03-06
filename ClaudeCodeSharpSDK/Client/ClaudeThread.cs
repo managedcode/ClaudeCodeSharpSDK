@@ -22,6 +22,12 @@ public sealed class ClaudeThread : IDisposable
         "This overload relies on reflection-based JSON serialization and is not AOT/trimming-safe. Use the JsonTypeInfo<TResponse> overload.";
     private const string ImageInputUnsupportedMessage =
         "Claude Code print mode currently supports text-only input in this SDK.";
+    private const string EventParseFailedMessagePrefix = "Failed to parse Claude Code event:";
+    private const string UnsupportedInputTypeMessagePrefix = "Unsupported input type";
+    private const string ParagraphSeparator = "\n\n";
+    private const string Space = " ";
+    private const string MessageQuote = "'";
+    private const string MessageSuffix = ".";
 
     private readonly ClaudeExec _exec;
     private readonly ClaudeOptions _options;
@@ -290,7 +296,7 @@ public sealed class ClaudeThread : IDisposable
             }
             catch (Exception exception)
             {
-                throw new InvalidOperationException($"Failed to parse Claude Code event: {line}", exception);
+                throw new InvalidOperationException(string.Concat(EventParseFailedMessagePrefix, Space, line), exception);
             }
 
             if (parsedEvent is ThreadStartedEvent startedEvent)
@@ -348,18 +354,20 @@ public sealed class ClaudeThread : IDisposable
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            throw new InvalidOperationException($"{EmptyTypedRunResponseMessagePrefix} '{typeof(TResponse).FullName}'.");
+            throw new InvalidOperationException(
+                string.Concat(EmptyTypedRunResponseMessagePrefix, Space, MessageQuote, typeof(TResponse).FullName, MessageQuote, MessageSuffix));
         }
 
         try
         {
             return JsonSerializer.Deserialize(json, jsonTypeInfo)
-                   ?? throw new InvalidOperationException($"{EmptyTypedRunResponseMessagePrefix} '{typeof(TResponse).FullName}'.");
+                   ?? throw new InvalidOperationException(
+                       string.Concat(EmptyTypedRunResponseMessagePrefix, Space, MessageQuote, typeof(TResponse).FullName, MessageQuote, MessageSuffix));
         }
         catch (JsonException exception)
         {
             throw new InvalidOperationException(
-                $"{TypedRunDeserializeFailedMessagePrefix} '{typeof(TResponse).FullName}'.",
+                string.Concat(TypedRunDeserializeFailedMessagePrefix, Space, MessageQuote, typeof(TResponse).FullName, MessageQuote, MessageSuffix),
                 exception);
         }
     }
@@ -370,13 +378,15 @@ public sealed class ClaudeThread : IDisposable
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            throw new InvalidOperationException($"{EmptyTypedRunResponseMessagePrefix} '{typeof(TResponse).FullName}'.");
+            throw new InvalidOperationException(
+                string.Concat(EmptyTypedRunResponseMessagePrefix, Space, MessageQuote, typeof(TResponse).FullName, MessageQuote, MessageSuffix));
         }
 
         try
         {
             return JsonSerializer.Deserialize<TResponse>(json)
-                   ?? throw new InvalidOperationException($"{EmptyTypedRunResponseMessagePrefix} '{typeof(TResponse).FullName}'.");
+                   ?? throw new InvalidOperationException(
+                       string.Concat(EmptyTypedRunResponseMessagePrefix, Space, MessageQuote, typeof(TResponse).FullName, MessageQuote, MessageSuffix));
         }
         catch (InvalidOperationException exception) when (exception.Message.Contains(ReflectionDisabledErrorToken, StringComparison.Ordinal))
         {
@@ -385,7 +395,7 @@ public sealed class ClaudeThread : IDisposable
         catch (JsonException exception)
         {
             throw new InvalidOperationException(
-                $"{TypedRunDeserializeFailedMessagePrefix} '{typeof(TResponse).FullName}'.",
+                string.Concat(TypedRunDeserializeFailedMessagePrefix, Space, MessageQuote, typeof(TResponse).FullName, MessageQuote, MessageSuffix),
                 exception);
         }
     }
@@ -414,11 +424,12 @@ public sealed class ClaudeThread : IDisposable
                     break;
 
                 default:
-                    throw new NotSupportedException($"Unsupported input type '{item.GetType().Name}'.");
+                    throw new NotSupportedException(
+                        string.Concat(UnsupportedInputTypeMessagePrefix, Space, MessageQuote, item.GetType().Name, MessageQuote, MessageSuffix));
             }
         }
 
-        return string.Join("\n\n", promptParts);
+        return string.Join(ParagraphSeparator, promptParts);
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) == 1, nameof(ClaudeThread));

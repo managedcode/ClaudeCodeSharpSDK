@@ -4,6 +4,17 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Unit;
 
 public class StructuredOutputSchemaTests
 {
+    private const string AdditionalPropertiesPropertyName = "additionalProperties";
+    private const string BlankPropertyName = " ";
+    private const string BooleanSchemaType = "boolean";
+    private const string MustExistInSchemaPropertiesMessageFragment = "must exist in schema properties";
+    private const string NumberSchemaType = "number";
+    private const string ObjectSchemaType = "object";
+    private const string PropertiesPropertyName = "properties";
+    private const string RequiredPropertyName = "required";
+    private const string TypePropertyName = "type";
+    private const string StringSchemaType = "string";
+
     private sealed record ScoreStatusResponse(string Status, double Score, bool Ok);
     private sealed record MissingPropertyResponse(string Missing);
 
@@ -17,12 +28,12 @@ public class StructuredOutputSchemaTests
             (response => response.Ok, StructuredOutputSchema.Flag()));
 
         var json = schema.ToJsonObject();
-        await Assert.That(json["type"]!.GetValue<string>()).IsEqualTo("object");
-        await Assert.That(json["properties"]![nameof(ScoreStatusResponse.Status)]!["type"]!.GetValue<string>()).IsEqualTo("string");
-        await Assert.That(json["properties"]![nameof(ScoreStatusResponse.Score)]!["type"]!.GetValue<string>()).IsEqualTo("number");
-        await Assert.That(json["properties"]![nameof(ScoreStatusResponse.Ok)]!["type"]!.GetValue<string>()).IsEqualTo("boolean");
-        await Assert.That(json["required"]![0]!.GetValue<string>()).IsEqualTo(nameof(ScoreStatusResponse.Status));
-        await Assert.That(json["additionalProperties"]!.GetValue<bool>()).IsFalse();
+        await Assert.That(json[TypePropertyName]!.GetValue<string>()).IsEqualTo(ObjectSchemaType);
+        await Assert.That(json[PropertiesPropertyName]![nameof(ScoreStatusResponse.Status)]![TypePropertyName]!.GetValue<string>()).IsEqualTo(StringSchemaType);
+        await Assert.That(json[PropertiesPropertyName]![nameof(ScoreStatusResponse.Score)]![TypePropertyName]!.GetValue<string>()).IsEqualTo(NumberSchemaType);
+        await Assert.That(json[PropertiesPropertyName]![nameof(ScoreStatusResponse.Ok)]![TypePropertyName]!.GetValue<string>()).IsEqualTo(BooleanSchemaType);
+        await Assert.That(json[RequiredPropertyName]![0]!.GetValue<string>()).IsEqualTo(nameof(ScoreStatusResponse.Status));
+        await Assert.That(json[AdditionalPropertiesPropertyName]!.GetValue<bool>()).IsFalse();
     }
 
     [Test]
@@ -31,7 +42,7 @@ public class StructuredOutputSchemaTests
         var action = () => StructuredOutputSchema.Map(
             new Dictionary<string, StructuredOutputSchema>
             {
-                [" "] = StructuredOutputSchema.PlainText(),
+                [BlankPropertyName] = StructuredOutputSchema.PlainText(),
             });
 
         var exception = await Assert.That(action).ThrowsException();
@@ -50,7 +61,7 @@ public class StructuredOutputSchemaTests
 
         var exception = await Assert.That(action).ThrowsException();
         await Assert.That(exception).IsTypeOf<ArgumentException>();
-        await Assert.That(exception!.Message).Contains("must exist in schema properties");
+        await Assert.That(exception!.Message).Contains(MustExistInSchemaPropertiesMessageFragment);
     }
 
     [Test]

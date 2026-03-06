@@ -14,6 +14,22 @@ public enum StructuredOutputSchemaType
 
 public sealed record StructuredOutputSchema
 {
+    private const string MissingRequiredSchemaPropertyMessagePrefix = "Required property";
+    private const string MissingRequiredSchemaPropertyMessageSuffix = "must exist in schema properties.";
+    private const string PropertyMappingRequiredMessage = "At least one property mapping is required.";
+    private const string UnsupportedSchemaTypeMessagePrefix = "Unsupported schema type:";
+    private const string ArraySchemaRequiresItemsMessage = "Array schema requires Items.";
+    private const string ObjectSchemaRequiresPropertiesMessage = "Object schema requires Properties.";
+    private const string InvalidPropertySelectorMessage = "Property selector must point to a model property.";
+    private const string JsonEscapeBackslash = "\\";
+    private const string JsonEscapedBackslash = "\\\\";
+    private const string JsonQuote = "\"";
+    private const string JsonEscapedQuote = "\\\"";
+    private const string JsonNodeCreationFailedMessage = "Failed to create JSON node for required property.";
+    private const string Space = " ";
+    private const string MessageQuote = "'";
+    private const string MessageSuffix = ".";
+
     public required StructuredOutputSchemaType Type { get; init; }
 
     public IReadOnlyDictionary<string, StructuredOutputSchema>? Properties { get; init; }
@@ -79,7 +95,14 @@ public sealed record StructuredOutputSchema
                 if (!properties.ContainsKey(requiredProperty))
                 {
                     throw new ArgumentException(
-                        $"Required property '{requiredProperty}' must exist in schema properties.",
+                        string.Concat(
+                            MissingRequiredSchemaPropertyMessagePrefix,
+                            Space,
+                            MessageQuote,
+                            requiredProperty,
+                            MessageQuote,
+                            Space,
+                            MissingRequiredSchemaPropertyMessageSuffix),
                         nameof(required));
                 }
             }
@@ -101,7 +124,7 @@ public sealed record StructuredOutputSchema
         ArgumentNullException.ThrowIfNull(properties);
         if (properties.Length == 0)
         {
-            throw new ArgumentException("At least one property mapping is required.", nameof(properties));
+            throw new ArgumentException(PropertyMappingRequiredMessage, nameof(properties));
         }
 
         var mappedProperties = new Dictionary<string, StructuredOutputSchema>(StringComparer.Ordinal);
@@ -129,7 +152,7 @@ public sealed record StructuredOutputSchema
             StructuredOutputSchemaType.Flag => PrimitiveSchema(JsonTypeTokens.Boolean),
             StructuredOutputSchemaType.Sequence => ArraySchema(),
             StructuredOutputSchemaType.Map => ObjectSchema(),
-            _ => throw new InvalidOperationException($"Unsupported schema type: {Type}."),
+            _ => throw new InvalidOperationException(string.Concat(UnsupportedSchemaTypeMessagePrefix, Space, Type.ToString(), MessageSuffix)),
         };
     }
 
@@ -145,7 +168,7 @@ public sealed record StructuredOutputSchema
     {
         if (Items is null)
         {
-            throw new InvalidOperationException("Array schema requires Items.");
+            throw new InvalidOperationException(ArraySchemaRequiresItemsMessage);
         }
 
         return new JsonObject
@@ -159,7 +182,7 @@ public sealed record StructuredOutputSchema
     {
         if (Properties is null)
         {
-            throw new InvalidOperationException("Object schema requires Properties.");
+            throw new InvalidOperationException(ObjectSchemaRequiresPropertiesMessage);
         }
 
         var properties = new JsonObject();
@@ -205,17 +228,17 @@ public sealed record StructuredOutputSchema
             return memberExpression.Member.Name;
         }
 
-        throw new ArgumentException("Property selector must point to a model property.");
+        throw new ArgumentException(InvalidPropertySelectorMessage);
     }
 
     private static JsonNode CreateStringJsonNode(string value)
     {
         var escapedValue = value
-            .Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\"", "\\\"", StringComparison.Ordinal);
+            .Replace(JsonEscapeBackslash, JsonEscapedBackslash, StringComparison.Ordinal)
+            .Replace(JsonQuote, JsonEscapedQuote, StringComparison.Ordinal);
 
-        return JsonNode.Parse($"\"{escapedValue}\"")
-               ?? throw new InvalidOperationException("Failed to create JSON node for required property.");
+        return JsonNode.Parse(string.Concat(JsonQuote, escapedValue, JsonQuote))
+               ?? throw new InvalidOperationException(JsonNodeCreationFailedMessage);
     }
 
     private static class JsonTypeTokens

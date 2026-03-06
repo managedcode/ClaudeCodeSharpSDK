@@ -7,6 +7,9 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Client;
 
 public sealed class ClaudeClient : IDisposable
 {
+    private const string ClientNotConnectedMessagePrefix = "Client not connected. Call ";
+    private const string ClientNotConnectedMessageSuffix = " first.";
+
     private readonly ClaudeOptions _options;
     private readonly bool _autoStart;
     private readonly ConnectionState _connectionState;
@@ -156,7 +159,8 @@ public sealed class ClaudeClient : IDisposable
 
                 if (!autoStart)
                 {
-                    throw new InvalidOperationException($"Client not connected. Call {nameof(StartAsync)} first.");
+                    throw new InvalidOperationException(
+                        string.Concat(ClientNotConnectedMessagePrefix, nameof(StartAsync), ClientNotConnectedMessageSuffix));
                 }
 
                 _exec = execFactory();

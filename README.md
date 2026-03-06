@@ -197,10 +197,11 @@ Console.WriteLine(result.FinalResponse);
 
 ```csharp
 using ManagedCode.ClaudeCodeSharpSDK.Client;
+using ManagedCode.ClaudeCodeSharpSDK.Models;
 
 var options = new ThreadOptions
 {
-    Model = "claude-opus-4-5",
+    Model = ClaudeModels.ClaudeOpus45,
     PermissionMode = PermissionMode.AcceptEdits,
     AllowedTools = ["Read", "Write", "Edit"],
     DisallowedTools = ["Bash"],

@@ -10,6 +10,8 @@ internal static class RealClaudeTestSupport
 {
     private const string AuthCommand = "auth";
     private const string StatusCommand = "status";
+    private const string LoginGuidanceFragment = "Please run /login";
+    private const string UnauthorizedStatusCodeFragment = "401";
     private const string AuthenticationRequiredMessage =
         "Authenticated Claude Code session is required for this test. Run 'claude auth status' and complete '/login' first.";
     private const string ClaudeExecutableNotFoundMessage =
@@ -64,7 +66,7 @@ internal static class RealClaudeTestSupport
         }
 
         return ClaudeCliLocator.TryResolvePathExecutable(
-            Environment.GetEnvironmentVariable("PATH"),
+            Environment.GetEnvironmentVariable(TestConstants.PathEnvironmentVariable),
             OperatingSystem.IsWindows(),
             out executablePath);
     }
@@ -97,8 +99,8 @@ internal static class RealClaudeTestSupport
         }
 
         var combinedOutput = string.Concat(standardOutput, standardError);
-        return !combinedOutput.Contains("Please run /login", StringComparison.OrdinalIgnoreCase)
-               && !combinedOutput.Contains("401", StringComparison.OrdinalIgnoreCase);
+        return !combinedOutput.Contains(LoginGuidanceFragment, StringComparison.OrdinalIgnoreCase)
+               && !combinedOutput.Contains(UnauthorizedStatusCodeFragment, StringComparison.OrdinalIgnoreCase);
     }
 }
 

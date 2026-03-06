@@ -13,7 +13,7 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <PackageVersion>$(Version)</PackageVersion>
 
   </PropertyGroup>

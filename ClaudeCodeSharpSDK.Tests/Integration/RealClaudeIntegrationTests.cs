@@ -3,10 +3,12 @@ using ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Integration;
 
-[Property("RequiresClaudeAuth", "true")]
+[Property(TestConstants.RequiresClaudeAuthPropertyName, TestConstants.TrueString)]
 [RequiresAuthenticatedClaude]
 public class RealClaudeIntegrationTests
 {
+    private const string ReplyWithOkOnlyPrompt = "Reply with OK only.";
+
     [Test]
     public async Task RealClaude_RunAsync_WhenAuthenticated_ReturnsResponse()
     {
@@ -21,7 +23,7 @@ public class RealClaudeIntegrationTests
                 NoSessionPersistence = true,
             });
 
-            var result = await thread.RunAsync("Reply with OK only.");
+            var result = await thread.RunAsync(ReplyWithOkOnlyPrompt);
 
             await Assert.That(string.IsNullOrWhiteSpace(result.FinalResponse)).IsFalse();
         }

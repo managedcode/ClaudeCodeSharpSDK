@@ -57,10 +57,15 @@ public sealed class ClaudeExec
 
     private const string AnthropicApiKeyEnv = "ANTHROPIC_API_KEY";
     private const string AnthropicBaseUrlEnv = "ANTHROPIC_BASE_URL";
+    private const string ContinueAndResumeConflictMessage = "ContinueMostRecent and ResumeSessionId cannot both be set.";
+    private const string FlagAssignmentSeparator = "=";
     private const string ReplayUserMessagesUnsupportedMessage =
         "ReplayUserMessages requires Claude Code stream-json input, which this SDK does not support yet.";
     private const string AdditionalCliArgumentsReservedFlagMessagePrefix =
         "AdditionalCliArguments cannot override SDK-managed Claude Code flag";
+    private const string Space = " ";
+    private const string MessageQuote = "'";
+    private const string MessageSuffix = ".";
 
     private static readonly HashSet<string> ReservedAdditionalCliFlags = new(StringComparer.Ordinal)
     {
@@ -124,7 +129,7 @@ public sealed class ClaudeExec
 
         if (args.ContinueMostRecent && !string.IsNullOrWhiteSpace(args.ResumeSessionId))
         {
-            throw new InvalidOperationException("ContinueMostRecent and ResumeSessionId cannot both be set.");
+            throw new InvalidOperationException(ContinueAndResumeConflictMessage);
         }
 
         var commandArgs = new List<string>
@@ -432,7 +437,8 @@ public sealed class ClaudeExec
 
         if (TryFindReservedAdditionalCliFlag(args.AdditionalCliArguments, out var reservedFlag))
         {
-            throw new InvalidOperationException($"{AdditionalCliArgumentsReservedFlagMessagePrefix} '{reservedFlag}'.");
+            throw new InvalidOperationException(
+                string.Concat(AdditionalCliArgumentsReservedFlagMessagePrefix, Space, MessageQuote, reservedFlag, MessageQuote, MessageSuffix));
         }
     }
 
@@ -455,7 +461,7 @@ public sealed class ClaudeExec
             foreach (var flag in ReservedAdditionalCliFlags)
             {
                 if (string.Equals(argument, flag, StringComparison.Ordinal)
-                    || argument.StartsWith($"{flag}=", StringComparison.Ordinal))
+                    || argument.StartsWith(string.Concat(flag, FlagAssignmentSeparator), StringComparison.Ordinal))
                 {
                     reservedFlag = flag;
                     return true;
@@ -519,6 +525,14 @@ internal interface IClaudeProcessRunner
 
 internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
 {
+    private const string StartExecutableFailedMessagePrefix = "Failed to start Claude Code executable";
+    private const string ProcessFailedWithoutStderrMessage = "Claude Code process failed without stderr output.";
+    private const string CliExitedWithCodeMessagePrefix = "Claude Code CLI exited with code";
+    private const string Space = " ";
+    private const string MessageQuote = "'";
+    private const string MessageSuffix = ".";
+    private const string PeriodSpace = ". ";
+
     public async IAsyncEnumerable<string> RunAsync(
         ClaudeProcessInvocation invocation,
         ILogger logger,
@@ -550,12 +564,15 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         {
             if (!process.Start())
             {
-                throw new InvalidOperationException($"Failed to start Claude Code executable '{invocation.ExecutablePath}'.");
+                throw new InvalidOperationException(
+                    string.Concat(StartExecutableFailedMessagePrefix, Space, MessageQuote, invocation.ExecutablePath, MessageQuote, MessageSuffix));
             }
         }
         catch (Exception exception)
         {
-            throw new InvalidOperationException($"Failed to start Claude Code executable '{invocation.ExecutablePath}'.", exception);
+            throw new InvalidOperationException(
+                string.Concat(StartExecutableFailedMessagePrefix, Space, MessageQuote, invocation.ExecutablePath, MessageQuote, MessageSuffix),
+                exception);
         }
 
         using var registration = cancellationToken.Register(() => TryKillProcess(process, logger, invocation.ExecutablePath));
@@ -582,9 +599,10 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         if (process.ExitCode != 0)
         {
             var details = string.IsNullOrWhiteSpace(standardError)
-                ? "Claude Code process failed without stderr output."
+                ? ProcessFailedWithoutStderrMessage
                 : standardError.Trim();
-            throw new InvalidOperationException($"Claude Code CLI exited with code {process.ExitCode}. {details}");
+            throw new InvalidOperationException(
+                string.Concat(CliExitedWithCodeMessagePrefix, Space, process.ExitCode.ToString(CultureInfo.InvariantCulture), PeriodSpace, details));
         }
     }
 

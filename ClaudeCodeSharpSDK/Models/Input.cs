@@ -6,6 +6,8 @@ public sealed record TextInput(string Text) : UserInput;
 
 public sealed record LocalImageInput : UserInput
 {
+    private const string UnreadableImageStreamMessage = "Image stream must be readable.";
+
     internal string? Path { get; }
 
     internal FileInfo? File { get; }
@@ -33,7 +35,7 @@ public sealed record LocalImageInput : UserInput
         ArgumentNullException.ThrowIfNull(content);
         if (!content.CanRead)
         {
-            throw new ArgumentException("Image stream must be readable.", nameof(content));
+            throw new ArgumentException(UnreadableImageStreamMessage, nameof(content));
         }
 
         Content = content;
