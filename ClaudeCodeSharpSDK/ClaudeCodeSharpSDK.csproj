@@ -2,7 +2,6 @@
   <PropertyGroup>
     <Description>.NET SDK for the Anthropic Claude Code CLI with streaming thread events.</Description>
     <PackageId>ManagedCode.ClaudeCodeSharpSDK</PackageId>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <RootNamespace>ManagedCode.ClaudeCodeSharpSDK</RootNamespace>
     <AssemblyName>ManagedCode.ClaudeCodeSharpSDK</AssemblyName>
     <PackageTags>claude;anthropic;sdk;ai;agent;cli</PackageTags>
