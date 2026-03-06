@@ -37,10 +37,12 @@ public class ClaudeCliSmokeTests
     private const string FailedToResolveExecutablePathMessage = "Failed to resolve Claude Code CLI path.";
     private const string CouldNotLocateRepositoryRootMessage = "Could not locate repository root from test execution directory.";
     private const string StartProcessFailedMessagePrefix = "Failed to start Claude Code CLI at";
+    private const string ClaudeCodeNestingEnvironmentVariable = "CLAUDECODE";
     private const string Space = " ";
     private const string MessageQuote = "'";
     private const string MessageSuffix = ".";
     private static readonly string[] StandardLineSeparators = [Environment.NewLine, NewLine, CarriageReturn];
+    private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(30);
 
     [Test]
     public async Task ClaudeCli_Smoke_FindExecutablePath_ResolvesExistingBinary()
@@ -52,7 +54,8 @@ public class ClaudeCliSmokeTests
     [Test]
     public async Task ClaudeCli_Smoke_VersionCommand_ReturnsClaudeCodeVersion()
     {
-        var result = await RunClaudeAsync(ResolveExecutablePath(), null, VersionFlag);
+        using var timeoutCts = new CancellationTokenSource(TestTimeout);
+        var result = await RunClaudeAsync(ResolveExecutablePath(), null, timeoutCts.Token, VersionFlag);
 
         await Assert.That(result.ExitCode).IsEqualTo(0);
         await Assert.That(string.Concat(result.StandardOutput, result.StandardError))
@@ -62,7 +65,8 @@ public class ClaudeCliSmokeTests
     [Test]
     public async Task ClaudeCli_Smoke_HelpCommand_DescribesStreamJsonOutput()
     {
-        var result = await RunClaudeAsync(ResolveExecutablePath(), null, HelpFlag);
+        using var timeoutCts = new CancellationTokenSource(TestTimeout);
+        var result = await RunClaudeAsync(ResolveExecutablePath(), null, timeoutCts.Token, HelpFlag);
 
         await Assert.That(result.ExitCode).IsEqualTo(0);
         await Assert.That(string.Concat(result.StandardOutput, result.StandardError))
@@ -73,12 +77,14 @@ public class ClaudeCliSmokeTests
     public async Task ClaudeCli_Smoke_PrintModeWithoutAuth_EmitsInitAndLoginGuidance()
     {
         var sandboxDirectory = CreateSandboxDirectory();
+        using var timeoutCts = new CancellationTokenSource(TestTimeout);
 
         try
         {
             var result = await RunClaudeAsync(
                 ResolveExecutablePath(),
                 CreateUnauthenticatedEnvironmentOverrides(sandboxDirectory),
+                timeoutCts.Token,
                 PrintFlag,
                 OutputFormatFlag,
                 StreamJsonFormat,
@@ -190,10 +196,12 @@ public class ClaudeCliSmokeTests
     private static async Task<ClaudeProcessResult> RunClaudeAsync(
         string executablePath,
         IReadOnlyDictionary<string, string>? environmentOverrides,
+        CancellationToken cancellationToken = default,
         params string[] arguments)
     {
         var startInfo = new ProcessStartInfo(executablePath)
         {
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -204,6 +212,8 @@ public class ClaudeCliSmokeTests
         {
             startInfo.ArgumentList.Add(argument);
         }
+
+        startInfo.Environment.Remove(ClaudeCodeNestingEnvironmentVariable);
 
         if (environmentOverrides is not null)
         {
@@ -226,10 +236,27 @@ public class ClaudeCliSmokeTests
                     MessageSuffix));
         }
 
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        process.StandardInput.Close();
 
-        await process.WaitForExitAsync();
+        using var registration = cancellationToken.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Process already exited between check and kill — safe to ignore.
+            }
+        });
+
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
 
         return new ClaudeProcessResult(
             process.ExitCode,

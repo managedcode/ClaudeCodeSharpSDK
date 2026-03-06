@@ -320,6 +320,7 @@ internal static class ClaudeCliMetadataReader
     {
         var startInfo = new ProcessStartInfo(executablePath)
         {
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -331,6 +332,7 @@ internal static class ClaudeCliMetadataReader
                             ?? throw new InvalidOperationException(
                                 string.Concat(StartExecutableFailedMessagePrefix, Space, MessageQuote, executablePath, MessageQuote, MessageSuffix));
 
+        process.StandardInput.Close();
         var standardOutput = process.StandardOutput.ReadToEnd();
         var standardError = process.StandardError.ReadToEnd();
         process.WaitForExit();
@@ -359,6 +361,7 @@ internal static class ClaudeCliMetadataReader
             var gitExecutable = OperatingSystem.IsWindows() ? string.Concat(GitExecutableName, ExecutableExtension) : GitExecutableName;
             var startInfo = new ProcessStartInfo(gitExecutable)
             {
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -376,6 +379,7 @@ internal static class ClaudeCliMetadataReader
                 return (null, StartGitProcessFailedMessage);
             }
 
+            process.StandardInput.Close();
             var standardOutput = process.StandardOutput.ReadToEnd();
             var standardError = process.StandardError.ReadToEnd();
             process.WaitForExit();

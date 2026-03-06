@@ -75,6 +75,7 @@ internal static class RealClaudeTestSupport
     {
         var startInfo = new ProcessStartInfo(executablePath)
         {
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -89,6 +90,7 @@ internal static class RealClaudeTestSupport
             return false;
         }
 
+        process.StandardInput.Close();
         var standardOutput = process.StandardOutput.ReadToEnd();
         var standardError = process.StandardError.ReadToEnd();
         process.WaitForExit();

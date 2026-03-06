@@ -8,6 +8,7 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Integration;
 public class RealClaudeIntegrationTests
 {
     private const string ReplyWithOkOnlyPrompt = "Reply with OK only.";
+    private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(60);
 
     [Test]
     public async Task RealClaude_RunAsync_WhenAuthenticated_ReturnsResponse()
@@ -23,7 +24,11 @@ public class RealClaudeIntegrationTests
                 NoSessionPersistence = true,
             });
 
-            var result = await thread.RunAsync(ReplyWithOkOnlyPrompt);
+            using var timeoutCts = new CancellationTokenSource(TestTimeout);
+            var result = await thread.RunAsync(ReplyWithOkOnlyPrompt, new TurnOptions
+            {
+                CancellationToken = timeoutCts.Token,
+            });
 
             await Assert.That(string.IsNullOrWhiteSpace(result.FinalResponse)).IsFalse();
         }
