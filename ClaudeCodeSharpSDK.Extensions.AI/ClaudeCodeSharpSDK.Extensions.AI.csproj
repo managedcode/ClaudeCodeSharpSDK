@@ -2,6 +2,7 @@
   <PropertyGroup>
     <Description>.NET Microsoft.Extensions.AI adapter for ClaudeCodeSharpSDK, providing IChatClient integration.</Description>
     <PackageId>ManagedCode.ClaudeCodeSharpSDK.Extensions.AI</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <RootNamespace>ManagedCode.ClaudeCodeSharpSDK.Extensions.AI</RootNamespace>
     <AssemblyName>ManagedCode.ClaudeCodeSharpSDK.Extensions.AI</AssemblyName>
     <PackageTags>claude;anthropic;sdk;ai;agent;cli;microsoft-extensions-ai;ichatclient</PackageTags>
@@ -10,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="/" Link="README.md" Visible="false" />
     <PackageReference Include="DotNet.ReproducibleBuilds">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
