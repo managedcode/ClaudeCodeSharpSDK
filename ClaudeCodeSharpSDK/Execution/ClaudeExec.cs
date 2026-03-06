@@ -57,6 +57,7 @@ public sealed class ClaudeExec
 
     private const string AnthropicApiKeyEnv = "ANTHROPIC_API_KEY";
     private const string AnthropicBaseUrlEnv = "ANTHROPIC_BASE_URL";
+    private const string ClaudeCodeNestingEnv = "CLAUDECODE";
     private const string ContinueAndResumeConflictMessage = "ContinueMostRecent and ResumeSessionId cannot both be set.";
     private const string FlagAssignmentSeparator = "=";
     private const string ReplayUserMessagesUnsupportedMessage =
@@ -303,7 +304,9 @@ public sealed class ClaudeExec
 
         foreach (DictionaryEntry variable in Environment.GetEnvironmentVariables())
         {
-            if (variable.Key is string key && variable.Value is string value)
+            if (variable.Key is string key
+                && variable.Value is string value
+                && !string.Equals(key, ClaudeCodeNestingEnv, StringComparison.OrdinalIgnoreCase))
             {
                 environment[key] = value;
             }
