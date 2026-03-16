@@ -58,13 +58,8 @@ public sealed class ClaudeClient : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
 
-        var resolvedOptions = (options ?? new ThreadOptions()) with
-        {
-            ResumeSessionId = id,
-        };
-
         var exec = GetOrCreateExec();
-        return new ClaudeThread(exec, _options, resolvedOptions, id);
+        return new ClaudeThread(exec, _options, options ?? new ThreadOptions(), id);
     }
 
     public ClaudeCliMetadata GetCliMetadata()

@@ -9,6 +9,8 @@ public static class ClaudeServiceCollectionExtensions
         this IServiceCollection services,
         Action<ClaudeChatClientOptions>? configure = null)
     {
+        ArgumentNullException.ThrowIfNull(services);
+
         var options = new ClaudeChatClientOptions();
         configure?.Invoke(options);
         services.AddSingleton<IChatClient>(new ClaudeChatClient(options));
@@ -20,6 +22,9 @@ public static class ClaudeServiceCollectionExtensions
         object serviceKey,
         Action<ClaudeChatClientOptions>? configure = null)
     {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(serviceKey);
+
         var options = new ClaudeChatClientOptions();
         configure?.Invoke(options);
         services.AddKeyedSingleton<IChatClient>(serviceKey, new ClaudeChatClient(options));

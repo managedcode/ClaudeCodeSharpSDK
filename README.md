@@ -17,6 +17,7 @@ It is intentionally CLI-first. The library does not reimplement Anthropic APIs o
 - typed parsing for `stream-json` events
 - structured output with `StructuredOutputSchema`
 - optional `Microsoft.Extensions.AI` adapter package
+- optional Microsoft Agent Framework adapter package
 - repository automation that tracks upstream changes in `anthropics/claude-code`
 
 ## Source Of Truth
@@ -48,19 +49,25 @@ Optional `Microsoft.Extensions.AI` adapter:
 dotnet add package ManagedCode.ClaudeCodeSharpSDK.Extensions.AI
 ```
 
+Optional Microsoft Agent Framework adapter:
+
+```bash
+dotnet add package ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework
+```
+
 ## Prerequisites
 
 Before using the SDK, you need:
 
 - `claude` installed and available in `PATH`, or configured via `ClaudeOptions.ClaudeExecutablePath`
-- an authenticated local Claude Code session for real runs; `claude auth status` must not fail with `401` or `Please run /login`
+- an authenticated local Claude Code session for real runs
 
 Quick sanity check:
 
 ```bash
 claude --version
 claude --help
-claude auth status
+claude -p --output-format json --dangerously-skip-permissions --no-session-persistence "Reply with ok only."
 ```
 
 ## Quickstart
@@ -190,6 +197,81 @@ using var thread = client.ResumeThread("existing-session-id");
 var result = await thread.RunAsync("Continue from the previous plan.");
 Console.WriteLine(result.FinalResponse);
 ```
+
+## Microsoft Agent Framework
+
+`ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` is a thin Microsoft Agent Framework package over the existing `ClaudeChatClient`.
+
+```csharp
+using ManagedCode.ClaudeCodeSharpSDK.Extensions.AI;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+IChatClient chatClient = new ClaudeChatClient();
+
+AIAgent agent = chatClient.AsAIAgent(
+    name: "ClaudeAssistant",
+    instructions: "You are a concise coding assistant.");
+
+var response = await agent.RunAsync("What changed in this repository?");
+Console.WriteLine(response.Text);
+```
+
+DI registration:
+
+```csharp
+using ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework.Extensions;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+builder.Services.AddClaudeCodeAgent(
+    configureAgent: options =>
+    {
+        options.Name = "ClaudeAssistant";
+        options.ChatOptions = new ChatOptions
+        {
+            Instructions = "You are a concise coding assistant."
+        };
+    });
+
+app.MapGet("/agent", async (AIAgent agent) =>
+{
+    var response = await agent.RunAsync("Summarize the repository");
+    return response.ToString();
+});
+```
+
+Keyed DI registration:
+
+```csharp
+using ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework.Extensions;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddKeyedClaudeCodeAgent(
+    "claude-main",
+    configureAgent: options =>
+    {
+        options.Name = "ClaudeAssistant";
+        options.ChatOptions = new ChatOptions
+        {
+            Instructions = "You are a concise coding assistant."
+        };
+    });
+
+using var provider = services.BuildServiceProvider();
+var keyedAgent = provider.GetRequiredKeyedService<AIAgent>("claude-main");
+```
+
+This package builds on the existing `IChatClient` adapter, so the canonical MAF path remains `IChatClient.AsAIAgent(...)`; the Claude-specific package adds a supported package boundary and DI convenience methods.
+
+Current limitations are the same as the underlying `ClaudeChatClient` adapter:
+
+- message input is text-first in the current runtime surface
+- Claude CLI-managed tools are not exposed as provider-specific MAF callbacks by this SDK
+- streaming behavior follows `ClaudeChatClient` updates rather than token-level deltas
 
 ## Thread Options
 

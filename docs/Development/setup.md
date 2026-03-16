@@ -24,7 +24,8 @@ dotnet restore ManagedCode.ClaudeCodeSharpSDK.slnx
 
 - `ClaudeCodeSharpSDK/ClaudeCodeSharpSDK.csproj` — core `ManagedCode.ClaudeCodeSharpSDK` package.
 - `ClaudeCodeSharpSDK.Extensions.AI/ClaudeCodeSharpSDK.Extensions.AI.csproj` — optional `IChatClient` adapter package (`ManagedCode.ClaudeCodeSharpSDK.Extensions.AI`).
-- `ClaudeCodeSharpSDK.Tests/ClaudeCodeSharpSDK.Tests.csproj` — consolidated TUnit coverage for core SDK, CLI integration, and `Microsoft.Extensions.AI` adapter behavior.
+- `ClaudeCodeSharpSDK.Extensions.AgentFramework/ClaudeCodeSharpSDK.Extensions.AgentFramework.csproj` — optional Microsoft Agent Framework adapter package (`ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework`).
+- `ClaudeCodeSharpSDK.Tests/ClaudeCodeSharpSDK.Tests.csproj` — consolidated TUnit coverage for core SDK, CLI integration, `Microsoft.Extensions.AI`, and Microsoft Agent Framework adapter behavior.
 
 ## Local validation
 
@@ -45,6 +46,7 @@ dotnet test --project ClaudeCodeSharpSDK.Tests/ClaudeCodeSharpSDK.Tests.csproj -
 ```bash
 dotnet pack ClaudeCodeSharpSDK/ClaudeCodeSharpSDK.csproj -c Release --no-build -o artifacts
 dotnet pack ClaudeCodeSharpSDK.Extensions.AI/ClaudeCodeSharpSDK.Extensions.AI.csproj -c Release --no-build -o artifacts
+dotnet pack ClaudeCodeSharpSDK.Extensions.AgentFramework/ClaudeCodeSharpSDK.Extensions.AgentFramework.csproj -c Release --no-build -o artifacts
 ```
 
 ## CI/workflows

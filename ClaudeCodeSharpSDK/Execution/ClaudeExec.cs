@@ -578,34 +578,39 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
                 exception);
         }
 
-        using var registration = cancellationToken.Register(() => TryKillProcess(process, logger, invocation.ExecutablePath));
-
-        await process.StandardInput.WriteAsync(invocation.Input.AsMemory(), cancellationToken).ConfigureAwait(false);
-        await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
-        process.StandardInput.Close();
-
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        string? line;
-        while ((line = await process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
+        try
         {
-            if (line.Length == 0)
+            await process.StandardInput.WriteAsync(invocation.Input.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
+            process.StandardInput.Close();
+
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            string? line;
+            while ((line = await process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
             {
-                continue;
+                if (line.Length == 0)
+                {
+                    continue;
+                }
+
+                yield return line;
             }
 
-            yield return line;
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            var standardError = await stderrTask.ConfigureAwait(false);
+            if (process.ExitCode != 0)
+            {
+                var details = string.IsNullOrWhiteSpace(standardError)
+                    ? ProcessFailedWithoutStderrMessage
+                    : standardError.Trim();
+                throw new InvalidOperationException(
+                    string.Concat(CliExitedWithCodeMessagePrefix, Space, process.ExitCode.ToString(CultureInfo.InvariantCulture), PeriodSpace, details));
+            }
         }
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var standardError = await stderrTask.ConfigureAwait(false);
-        if (process.ExitCode != 0)
+        finally
         {
-            var details = string.IsNullOrWhiteSpace(standardError)
-                ? ProcessFailedWithoutStderrMessage
-                : standardError.Trim();
-            throw new InvalidOperationException(
-                string.Concat(CliExitedWithCodeMessagePrefix, Space, process.ExitCode.ToString(CultureInfo.InvariantCulture), PeriodSpace, details));
+            TryKillProcess(process, logger, invocation.ExecutablePath);
         }
     }
 

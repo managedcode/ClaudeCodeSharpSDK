@@ -44,6 +44,7 @@ The upstream reference repository `anthropics/claude-code` is tracked in this re
 - Typed run API supports both concise overloads (`RunAsync<TResponse>(..., outputSchema, ...)`) and full options overloads (`RunAsync<TResponse>(..., turnOptions)`); for AOT-safe typed deserialization pass `JsonTypeInfo<TResponse>`.
 - Convenience typed overloads without `JsonTypeInfo<TResponse>` are explicitly marked as AOT-unsafe with `RequiresDynamicCode` and `RequiresUnreferencedCode`.
 - `result` events with `is_error: true` must surface as `TurnFailedEvent`, and `RunAsync(...)` must raise `ThreadRunException`.
+- For Claude structured output turns, typed JSON may arrive via the `structured_output` field on the final `result` event even when textual `result` is empty; SDK typed runs must deserialize that JSON payload.
 - Invalid JSONL event lines must fail fast with parse context.
 - Protocol tokens are parsed via constants, not inline literals.
 - Optional `ILogger` (`Microsoft.Extensions.Logging`) receives process lifecycle diagnostics (start/success/failure/cancellation).

@@ -34,6 +34,7 @@ internal static class ClaudeProtocolConstants
         internal const string Skills = "skills";
         internal const string SlashCommands = "slash_commands";
         internal const string StopReason = "stop_reason";
+        internal const string StructuredOutput = "structured_output";
         internal const string Subtype = "subtype";
         internal const string Text = "text";
         internal const string ToolUseId = "tool_use_id";

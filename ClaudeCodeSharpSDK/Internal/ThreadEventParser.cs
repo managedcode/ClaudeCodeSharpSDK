@@ -10,6 +10,7 @@ internal static class ThreadEventParser
     private const string ParagraphSeparator = "\n\n";
     private const string MissingRequiredPropertyMessagePrefix = "Missing required property";
     private const string MissingRequiredStringPropertyMessagePrefix = "Missing required string property";
+    private const string EmptyJsonObject = "{}";
     private const string Space = " ";
     private const string MessageQuote = "'";
     private const string MessageSuffix = ".";
@@ -66,7 +67,13 @@ internal static class ThreadEventParser
         var durationMs = GetOptionalInt32(root, ClaudeProtocolConstants.Properties.DurationMs);
         var durationApiMs = GetOptionalInt32(root, ClaudeProtocolConstants.Properties.DurationApiMs);
         var numTurns = GetOptionalInt32(root, ClaudeProtocolConstants.Properties.NumTurns);
-        var resultText = GetOptionalString(root, ClaudeProtocolConstants.Properties.Result) ?? string.Empty;
+        var resultText = GetOptionalString(root, ClaudeProtocolConstants.Properties.Result);
+        if (string.IsNullOrWhiteSpace(resultText))
+        {
+            resultText = GetOptionalJsonText(root, ClaudeProtocolConstants.Properties.StructuredOutput);
+        }
+
+        resultText ??= string.Empty;
         var isError = GetOptionalBoolean(root, ClaudeProtocolConstants.Properties.IsError) ?? false;
 
         if (isError)
@@ -243,5 +250,19 @@ internal static class ThreadEventParser
         }
 
         return JsonNode.Parse(value.GetRawText());
+    }
+
+    private static string? GetOptionalJsonText(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var value)
+            || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        var rawText = value.GetRawText();
+        return string.Equals(rawText, EmptyJsonObject, StringComparison.Ordinal)
+            ? null
+            : rawText;
     }
 }

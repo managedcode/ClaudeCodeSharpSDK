@@ -18,9 +18,11 @@ Verify `ManagedCode.ClaudeCodeSharpSDK` behavior against real Claude Code CLI co
 - Cross-platform CI smoke also validates unauthenticated behavior in an isolated profile.
 - Real integration runs must use an existing Claude Code CLI login/session; test harness does not use API key environment variables.
 - Authenticated local integration tests use an explicit TUnit skip condition when no local Claude Code session is available; missing auth is reported as skipped, not silently passed.
+- Authenticated local integration skip detection uses a cached real Claude print-mode probe instead of `claude auth status`, because the CLI status command is not reliable in all local environments.
 - Real integration model selection may be overridden with `CLAUDE_TEST_MODEL`; otherwise tests use the Claude Code default model discovered from local settings.
 - Cover error paths and cancellation paths.
 - Keep protocol parser coverage for all supported event/item kinds.
+- Keep a large-stream parser performance profile test to catch regressions.
 - Treat `claude -p --output-format json|stream-json` as the protocol source of truth for smoke and parser tests.
 
 ## Commands
@@ -43,8 +45,11 @@ TUnit on Microsoft Testing Platform does not support `--filter`; run focused tes
 - CLI arg/env/config behavior: [ClaudeExecTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/ClaudeExecTests.cs)
 - CLI locator behavior: [ClaudeCliLocatorTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/ClaudeCliLocatorTests.cs)
 - CLI metadata parsing behavior: [ClaudeCliMetadataReaderTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/ClaudeCliMetadataReaderTests.cs)
+- SDK model catalog consistency: [ClaudeModelsTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/ClaudeModelsTests.cs)
 - Cross-platform Claude Code CLI smoke behavior: [ClaudeCliSmokeTests.cs](../../ClaudeCodeSharpSDK.Tests/Integration/ClaudeCliSmokeTests.cs)
+- Real process integration behavior: [ClaudeExecIntegrationTests.cs](../../ClaudeCodeSharpSDK.Tests/Integration/ClaudeExecIntegrationTests.cs)
 - Real Claude Code CLI integration behavior (local login required): [RealClaudeIntegrationTests.cs](../../ClaudeCodeSharpSDK.Tests/Integration/RealClaudeIntegrationTests.cs)
 - `Microsoft.Extensions.AI` mapper and DI behavior: [ClaudeCodeSharpSDK.Tests/MEAI](../../ClaudeCodeSharpSDK.Tests/MEAI)
 - Protocol parser behavior: [ThreadEventParserTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/ThreadEventParserTests.cs)
+- Protocol parser large-stream performance profile: [ThreadEventParserPerformanceTests.cs](../../ClaudeCodeSharpSDK.Tests/Performance/ThreadEventParserPerformanceTests.cs)
 - Structured output schema behavior: [StructuredOutputSchemaTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/StructuredOutputSchemaTests.cs)

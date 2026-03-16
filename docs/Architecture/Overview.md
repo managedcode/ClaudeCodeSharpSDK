@@ -7,9 +7,9 @@ Single source of truth: this file is navigational and coarse. Detailed behavior 
 ## Summary
 
 - **System:** .NET SDK wrapper over the Claude Code CLI print-mode protocol and non-interactive execution surface.
-- **Where is the code:** core SDK in `ClaudeCodeSharpSDK`; optional M.E.AI adapter in `ClaudeCodeSharpSDK.Extensions.AI`; automated coverage in `ClaudeCodeSharpSDK.Tests`.
-- **Entry points:** `ClaudeClient`, `ClaudeChatClient` (`IChatClient` adapter).
-- **Dependencies:** local `claude` CLI process, `System.Text.Json`, `Microsoft.Extensions.AI` (adapter package), GitHub Actions.
+- **Where is the code:** core SDK in `ClaudeCodeSharpSDK`; optional M.E.AI adapter in `ClaudeCodeSharpSDK.Extensions.AI`; optional Agent Framework adapter in `ClaudeCodeSharpSDK.Extensions.AgentFramework`; automated coverage in `ClaudeCodeSharpSDK.Tests`.
+- **Entry points:** `ClaudeClient`, `ClaudeChatClient` (`IChatClient` adapter), `AddClaudeCodeAgent` / `AddKeyedClaudeCodeAgent` (`AIAgent` DI helpers).
+- **Dependencies:** local `claude` CLI process, `System.Text.Json`, `Microsoft.Extensions.AI` (adapter package), `Microsoft.Agents.AI` (adapter package), GitHub Actions.
 
 ## Scoping (read first)
 
@@ -29,6 +29,7 @@ flowchart LR
   IO["Settings IO\nClaude settings discovery"]
   META["CLI Metadata\nClaudeCliMetadataReader"]
   MEAI["M.E.AI Adapter\nClaudeChatClient : IChatClient"]
+  AGENTFW["Agent Framework Adapter\nAIAgent DI helpers"]
   TESTS["TUnit Tests\nClaudeCodeSharpSDK.Tests"]
   CI["GitHub Actions\nCI / Release / CLI Watch"]
 
@@ -38,8 +39,10 @@ flowchart LR
   EXEC --> PARSER
   PARSER --> API
   MEAI --> API
+  AGENTFW --> MEAI
   TESTS --> API
   TESTS --> MEAI
+  TESTS --> AGENTFW
   TESTS --> EXEC
   CI --> TESTS
 ```
@@ -90,6 +93,7 @@ flowchart LR
 - `Config IO` — code: [ClaudeOptions.cs](../../ClaudeCodeSharpSDK/Configuration/ClaudeOptions.cs), [ClaudeCliMetadataReader.cs](../../ClaudeCodeSharpSDK/Internal/ClaudeCliMetadataReader.cs)
 - `CLI Metadata` — code: [ClaudeCliMetadataReader.cs](../../ClaudeCodeSharpSDK/Internal/ClaudeCliMetadataReader.cs), [ClaudeCliMetadata.cs](../../ClaudeCodeSharpSDK/Models/ClaudeCliMetadata.cs); docs: [cli-metadata.md](../Features/cli-metadata.md)
 - `M.E.AI Adapter` — code: [ClaudeChatClient.cs](../../ClaudeCodeSharpSDK.Extensions.AI/ClaudeChatClient.cs), [ClaudeServiceCollectionExtensions.cs](../../ClaudeCodeSharpSDK.Extensions.AI/Extensions/ClaudeServiceCollectionExtensions.cs); docs: [meai-integration.md](../Features/meai-integration.md); ADR: [003-microsoft-extensions-ai-integration.md](../ADR/003-microsoft-extensions-ai-integration.md)
+- `Agent Framework Adapter` — code: [ClaudeCodeSharpSDK.Extensions.AgentFramework](../../ClaudeCodeSharpSDK.Extensions.AgentFramework), [ClaudeServiceCollectionExtensions.cs](../../ClaudeCodeSharpSDK.Extensions.AgentFramework/Extensions/ClaudeServiceCollectionExtensions.cs); docs: [agent-framework-integration.md](../Features/agent-framework-integration.md); ADR: [004-microsoft-agent-framework-integration.md](../ADR/004-microsoft-agent-framework-integration.md)
 - `Testing` — code: [ClaudeCodeSharpSDK.Tests](../../ClaudeCodeSharpSDK.Tests); docs: [strategy.md](../Testing/strategy.md)
 - `Automation` — workflows: [.github/workflows](../../.github/workflows) (including `claude-cli-smoke.yml` and `claude-cli-watch.yml`); docs: [release-and-sync-automation.md](../Features/release-and-sync-automation.md)
 
@@ -112,11 +116,14 @@ flowchart LR
 - Allowed dependencies:
   - `ClaudeCodeSharpSDK.Tests/*` -> `ClaudeCodeSharpSDK/*`
   - `ClaudeCodeSharpSDK.Tests/*` -> `ClaudeCodeSharpSDK.Extensions.AI/*`
+  - `ClaudeCodeSharpSDK.Tests/*` -> `ClaudeCodeSharpSDK.Extensions.AgentFramework/*`
   - `ClaudeCodeSharpSDK.Extensions.AI/*` -> `ClaudeCodeSharpSDK/*`
+  - `ClaudeCodeSharpSDK.Extensions.AgentFramework/*` -> `ClaudeCodeSharpSDK.Extensions.AI/*`
   - Public API (`ClaudeClient`, `ClaudeThread`) -> internal execution/parsing helpers.
 - Forbidden dependencies:
   - No dependency from `ClaudeCodeSharpSDK/*` to `ClaudeCodeSharpSDK.Tests/*`.
   - No dependency from `ClaudeCodeSharpSDK/*` to `ClaudeCodeSharpSDK.Extensions.AI/*` unless via explicit adapter boundaries.
+  - No dependency from `ClaudeCodeSharpSDK/*` or `ClaudeCodeSharpSDK.Extensions.AI/*` to `ClaudeCodeSharpSDK.Extensions.AgentFramework/*` (MAF adapter is outermost and opt-in).
   - No runtime dependency on `submodules/anthropic-claude-code`; submodule is reference-only.
 - Integration style:
   - sync configuration + async process stream consumption (`IAsyncEnumerable<string>`)
@@ -127,6 +134,7 @@ flowchart LR
 - [001-claude-cli-wrapper.md](../ADR/001-claude-cli-wrapper.md) — wrap Claude Code CLI process as SDK transport.
 - [002-protocol-parsing-and-thread-serialization.md](../ADR/002-protocol-parsing-and-thread-serialization.md) — explicit protocol constants and serialized per-thread turn execution.
 - [003-microsoft-extensions-ai-integration.md](../ADR/003-microsoft-extensions-ai-integration.md) — `IChatClient` adapter in a separate package.
+- [004-microsoft-agent-framework-integration.md](../ADR/004-microsoft-agent-framework-integration.md) — `AIAgent` adapter layer built on top of the `IChatClient` package.
 
 ## 5) Where to go next
 

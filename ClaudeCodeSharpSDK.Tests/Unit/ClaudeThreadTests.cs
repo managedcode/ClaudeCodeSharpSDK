@@ -32,6 +32,7 @@ public partial class ClaudeThreadTests
     private const string ReadToolName = "Read";
     private const string ResultEventType = "result";
     private const string ReturnJsonPrompt = "Return JSON";
+    private const string ResumeFlag = "--resume";
     private const string SecondEventId = "evt-2";
     private const string SessionId = "session-123";
     private const string SuccessSubtype = "success";
@@ -103,6 +104,29 @@ public partial class ClaudeThreadTests
 
         await Assert.That(result.TypedResponse.Answer).IsEqualTo(OkText);
         await Assert.That(runner.Invocations[0].Arguments.Contains(JsonSchemaFlag)).IsTrue();
+    }
+
+    [Test]
+    public async Task RunAsync_OnResumedThread_PassesResumeFlagFromThreadId()
+    {
+        var runner = new FakeClaudeProcessRunner(
+            CreateSystemInitLine(SessionId, [], FirstEventId),
+            CreateResultLine(SessionId, FinalAnswerText, SecondEventId, durationMs: 8, durationApiMs: 7, totalCostUsd: 0m, inputTokens: 3, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, outputTokens: 2));
+        var exec = new ClaudeExec(TestConstants.ClaudeExecutablePath, null, null, runner);
+        using var client = new ClaudeClient(
+            new ClaudeClientOptions
+            {
+                AutoStart = true,
+                ClaudeOptions = new ClaudeOptions { ClaudeExecutablePath = TestConstants.ClaudeExecutablePath },
+            },
+            exec);
+        using var thread = client.ResumeThread(SessionId);
+
+        _ = await thread.RunAsync(HelloClaudeInput);
+
+        var resumeFlagIndex = runner.Invocations[0].Arguments.IndexOf(ResumeFlag);
+        await Assert.That(resumeFlagIndex).IsGreaterThan(-1);
+        await Assert.That(runner.Invocations[0].Arguments[resumeFlagIndex + 1]).IsEqualTo(SessionId);
     }
 
     private static ClaudeThread CreateThread(FakeClaudeProcessRunner runner, ThreadOptions? threadOptions = null)

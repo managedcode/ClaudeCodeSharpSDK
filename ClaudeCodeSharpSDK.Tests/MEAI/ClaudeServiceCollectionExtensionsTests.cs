@@ -9,6 +9,20 @@ public class ClaudeServiceCollectionExtensionsTests
 {
     private const string ConfiguredDefaultModel = "configured-default-model";
     private const string ClaudeServiceKey = "claude";
+    private const string ServiceKeyParameterName = "serviceKey";
+    private const string ServicesParameterName = "services";
+
+    [Test]
+    public async Task AddClaudeChatClient_ThrowsForNullServices()
+    {
+        ServiceCollection? services = null;
+
+        var action = () => services!.AddClaudeChatClient();
+
+        var exception = await Assert.That(action).ThrowsException();
+        await Assert.That(exception).IsTypeOf<ArgumentNullException>();
+        await Assert.That(((ArgumentNullException)exception!).ParamName).IsEqualTo(ServicesParameterName);
+    }
 
     [Test]
     public async Task AddClaudeChatClient_RegistersIChatClient()
@@ -60,6 +74,18 @@ public class ClaudeServiceCollectionExtensionsTests
         var provider = services.BuildServiceProvider();
         var client = provider.GetKeyedService<IChatClient>(ClaudeServiceKey);
         await Assert.That(client).IsNotNull();
+    }
+
+    [Test]
+    public async Task AddKeyedClaudeChatClient_ThrowsForNullServiceKey()
+    {
+        var services = new ServiceCollection();
+
+        var action = () => services.AddKeyedClaudeChatClient(serviceKey: null!);
+
+        var exception = await Assert.That(action).ThrowsException();
+        await Assert.That(exception).IsTypeOf<ArgumentNullException>();
+        await Assert.That(((ArgumentNullException)exception!).ParamName).IsEqualTo(ServiceKeyParameterName);
     }
 
     [Test]

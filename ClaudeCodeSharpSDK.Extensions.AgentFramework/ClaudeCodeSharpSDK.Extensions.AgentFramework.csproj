@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>.NET Microsoft Agent Framework adapter for ClaudeCodeSharpSDK, providing AIAgent integration.</Description>
+    <PackageId>ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework</PackageId>
+    <RootNamespace>ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework</RootNamespace>
+    <AssemblyName>ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework</AssemblyName>
+    <PackageTags>claude;anthropic;sdk;ai;agent;cli;microsoft-agent-framework;aiagent</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="/" Link="README.md" Visible="false" />
+    <PackageReference Include="DotNet.ReproducibleBuilds">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Agents.AI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClaudeCodeSharpSDK.Extensions.AI\ClaudeCodeSharpSDK.Extensions.AI.csproj" />
+  </ItemGroup>
+</Project>

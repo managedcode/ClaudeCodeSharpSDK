@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClaudeCodeSharpSDK.Extensions.AI\ClaudeCodeSharpSDK.Extensions.AI.csproj" />
+    <ProjectReference Include="..\ClaudeCodeSharpSDK.Extensions.AgentFramework\ClaudeCodeSharpSDK.Extensions.AgentFramework.csproj" />
     <ProjectReference Include="..\ClaudeCodeSharpSDK\ClaudeCodeSharpSDK.csproj" />
   </ItemGroup>
 </Project>

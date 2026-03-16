@@ -32,6 +32,7 @@ public sealed class ClaudeThread : IDisposable
     private readonly ClaudeExec _exec;
     private readonly ClaudeOptions _options;
     private readonly ThreadOptions _threadOptions;
+    // One active turn per thread instance (ADR 002).
     private readonly SemaphoreSlim _turnGate = new(1, 1);
     private int _disposed;
     private string? _id;
@@ -54,26 +55,32 @@ public sealed class ClaudeThread : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(input);
-        return Task.FromResult(new RunStreamedResult(RunStreamedWithTurnGateAsync(input, turnOptions ?? new TurnOptions())));
+        var normalizedInput = new NormalizedInput(input);
+        var resolvedTurnOptions = turnOptions ?? new TurnOptions();
+        return Task.FromResult(new RunStreamedResult(RunStreamedWithTurnGateAsync(normalizedInput, resolvedTurnOptions)));
     }
 
     public Task<RunStreamedResult> RunStreamedAsync(IReadOnlyList<UserInput> input, TurnOptions? turnOptions = null)
     {
         ThrowIfDisposed();
-        return Task.FromResult(new RunStreamedResult(RunStreamedWithTurnGateAsync(NormalizeInput(input), turnOptions ?? new TurnOptions())));
+        var normalizedInput = NormalizeInput(input);
+        var resolvedTurnOptions = turnOptions ?? new TurnOptions();
+        return Task.FromResult(new RunStreamedResult(RunStreamedWithTurnGateAsync(normalizedInput, resolvedTurnOptions)));
     }
 
     public Task<RunResult> RunAsync(string input, TurnOptions? turnOptions = null)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(input);
-        return RunInternalAsync(input, turnOptions ?? new TurnOptions());
+        var normalizedInput = new NormalizedInput(input);
+        return RunInternalAsync(normalizedInput, turnOptions ?? new TurnOptions());
     }
 
     public Task<RunResult> RunAsync(IReadOnlyList<UserInput> input, TurnOptions? turnOptions = null)
     {
         ThrowIfDisposed();
-        return RunInternalAsync(NormalizeInput(input), turnOptions ?? new TurnOptions());
+        var normalizedInput = NormalizeInput(input);
+        return RunInternalAsync(normalizedInput, turnOptions ?? new TurnOptions());
     }
 
     [RequiresDynamicCode(AotUnsafeTypedRunMessage)]
@@ -82,7 +89,9 @@ public sealed class ClaudeThread : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(input);
-        return RunTypedInternalWithReflectionAsync<TResponse>(input, EnsureTypedRunOptions(turnOptions));
+        var normalizedInput = new NormalizedInput(input);
+        var runOptions = EnsureTypedRunOptions(turnOptions);
+        return RunTypedInternalWithReflectionAsync<TResponse>(normalizedInput, runOptions);
     }
 
     public Task<RunResult<TResponse>> RunAsync<TResponse>(
@@ -93,7 +102,9 @@ public sealed class ClaudeThread : IDisposable
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(jsonTypeInfo);
-        return RunTypedInternalAsync(input, EnsureTypedRunOptions(turnOptions), jsonTypeInfo);
+        var normalizedInput = new NormalizedInput(input);
+        var runOptions = EnsureTypedRunOptions(turnOptions);
+        return RunTypedInternalAsync(normalizedInput, runOptions, jsonTypeInfo);
     }
 
     [RequiresDynamicCode(AotUnsafeTypedRunMessage)]
@@ -101,7 +112,9 @@ public sealed class ClaudeThread : IDisposable
     public Task<RunResult<TResponse>> RunAsync<TResponse>(IReadOnlyList<UserInput> input, TurnOptions? turnOptions = null)
     {
         ThrowIfDisposed();
-        return RunTypedInternalWithReflectionAsync<TResponse>(NormalizeInput(input), EnsureTypedRunOptions(turnOptions));
+        var normalizedInput = NormalizeInput(input);
+        var runOptions = EnsureTypedRunOptions(turnOptions);
+        return RunTypedInternalWithReflectionAsync<TResponse>(normalizedInput, runOptions);
     }
 
     public Task<RunResult<TResponse>> RunAsync<TResponse>(
@@ -111,7 +124,9 @@ public sealed class ClaudeThread : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(jsonTypeInfo);
-        return RunTypedInternalAsync(NormalizeInput(input), EnsureTypedRunOptions(turnOptions), jsonTypeInfo);
+        var normalizedInput = NormalizeInput(input);
+        var runOptions = EnsureTypedRunOptions(turnOptions);
+        return RunTypedInternalAsync(normalizedInput, runOptions, jsonTypeInfo);
     }
 
     [RequiresDynamicCode(AotUnsafeTypedRunMessage)]
@@ -123,7 +138,9 @@ public sealed class ClaudeThread : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(input);
-        return RunTypedInternalWithReflectionAsync<TResponse>(input, CreateTypedTurnOptions(outputSchema, cancellationToken));
+        var normalizedInput = new NormalizedInput(input);
+        var runOptions = CreateTypedTurnOptions(outputSchema, cancellationToken);
+        return RunTypedInternalWithReflectionAsync<TResponse>(normalizedInput, runOptions);
     }
 
     public Task<RunResult<TResponse>> RunAsync<TResponse>(
@@ -135,7 +152,9 @@ public sealed class ClaudeThread : IDisposable
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(jsonTypeInfo);
-        return RunTypedInternalAsync(input, CreateTypedTurnOptions(outputSchema, cancellationToken), jsonTypeInfo);
+        var normalizedInput = new NormalizedInput(input);
+        var runOptions = CreateTypedTurnOptions(outputSchema, cancellationToken);
+        return RunTypedInternalAsync(normalizedInput, runOptions, jsonTypeInfo);
     }
 
     [RequiresDynamicCode(AotUnsafeTypedRunMessage)]
@@ -146,7 +165,9 @@ public sealed class ClaudeThread : IDisposable
         CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        return RunTypedInternalWithReflectionAsync<TResponse>(NormalizeInput(input), CreateTypedTurnOptions(outputSchema, cancellationToken));
+        var normalizedInput = NormalizeInput(input);
+        var runOptions = CreateTypedTurnOptions(outputSchema, cancellationToken);
+        return RunTypedInternalWithReflectionAsync<TResponse>(normalizedInput, runOptions);
     }
 
     public Task<RunResult<TResponse>> RunAsync<TResponse>(
@@ -157,7 +178,9 @@ public sealed class ClaudeThread : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(jsonTypeInfo);
-        return RunTypedInternalAsync(NormalizeInput(input), CreateTypedTurnOptions(outputSchema, cancellationToken), jsonTypeInfo);
+        var normalizedInput = NormalizeInput(input);
+        var runOptions = CreateTypedTurnOptions(outputSchema, cancellationToken);
+        return RunTypedInternalAsync(normalizedInput, runOptions, jsonTypeInfo);
     }
 
     public void Dispose()
@@ -170,13 +193,13 @@ public sealed class ClaudeThread : IDisposable
         _turnGate.Dispose();
     }
 
-    private async Task<RunResult> RunInternalAsync(string prompt, TurnOptions turnOptions)
+    private async Task<RunResult> RunInternalAsync(NormalizedInput normalizedInput, TurnOptions turnOptions)
     {
         var items = new List<ThreadItem>();
         var finalResponse = string.Empty;
         Usage? usage = null;
 
-        await foreach (var threadEvent in RunStreamedWithTurnGateAsync(prompt, turnOptions).ConfigureAwait(false))
+        await foreach (var threadEvent in RunStreamedWithTurnGateAsync(normalizedInput, turnOptions).ConfigureAwait(false))
         {
             switch (threadEvent)
             {
@@ -210,7 +233,7 @@ public sealed class ClaudeThread : IDisposable
     }
 
     private async IAsyncEnumerable<ThreadEvent> RunStreamedWithTurnGateAsync(
-        string prompt,
+        NormalizedInput normalizedInput,
         TurnOptions turnOptions,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -224,7 +247,7 @@ public sealed class ClaudeThread : IDisposable
         await _turnGate.WaitAsync(linkedCancellationToken).ConfigureAwait(false);
         try
         {
-            await foreach (var threadEvent in RunStreamedInternalAsync(prompt, turnOptions, linkedCancellationToken)
+            await foreach (var threadEvent in RunStreamedInternalAsync(normalizedInput, turnOptions, linkedCancellationToken)
                                .WithCancellation(linkedCancellationToken)
                                .ConfigureAwait(false))
             {
@@ -238,7 +261,7 @@ public sealed class ClaudeThread : IDisposable
     }
 
     private async IAsyncEnumerable<ThreadEvent> RunStreamedInternalAsync(
-        string prompt,
+        NormalizedInput normalizedInput,
         TurnOptions turnOptions,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -246,7 +269,7 @@ public sealed class ClaudeThread : IDisposable
 
         var execArgs = new ClaudeExecArgs
         {
-            Input = prompt,
+            Input = normalizedInput.Prompt,
             BaseUrl = _options.BaseUrl,
             ApiKey = _options.ApiKey,
             Model = _threadOptions.Model,
@@ -309,11 +332,11 @@ public sealed class ClaudeThread : IDisposable
     }
 
     private async Task<RunResult<TResponse>> RunTypedInternalAsync<TResponse>(
-        string prompt,
+        NormalizedInput normalizedInput,
         TurnOptions turnOptions,
         JsonTypeInfo<TResponse> jsonTypeInfo)
     {
-        var result = await RunInternalAsync(prompt, turnOptions).ConfigureAwait(false);
+        var result = await RunInternalAsync(normalizedInput, turnOptions).ConfigureAwait(false);
         var typedResponse = DeserializeTypedResponse(result.FinalResponse, jsonTypeInfo);
         return new RunResult<TResponse>(result.Items, result.FinalResponse, result.Usage, typedResponse);
     }
@@ -321,10 +344,10 @@ public sealed class ClaudeThread : IDisposable
     [RequiresDynamicCode(AotUnsafeTypedRunMessage)]
     [RequiresUnreferencedCode(AotUnsafeTypedRunMessage)]
     private async Task<RunResult<TResponse>> RunTypedInternalWithReflectionAsync<TResponse>(
-        string prompt,
+        NormalizedInput normalizedInput,
         TurnOptions turnOptions)
     {
-        var result = await RunInternalAsync(prompt, turnOptions).ConfigureAwait(false);
+        var result = await RunInternalAsync(normalizedInput, turnOptions).ConfigureAwait(false);
         var typedResponse = DeserializeTypedResponseWithReflection<TResponse>(result.FinalResponse);
         return new RunResult<TResponse>(result.Items, result.FinalResponse, result.Usage, typedResponse);
     }
@@ -400,7 +423,7 @@ public sealed class ClaudeThread : IDisposable
         }
     }
 
-    private static string NormalizeInput(IReadOnlyList<UserInput> input)
+    private static NormalizedInput NormalizeInput(IReadOnlyList<UserInput> input)
     {
         ArgumentNullException.ThrowIfNull(input);
 
@@ -429,8 +452,10 @@ public sealed class ClaudeThread : IDisposable
             }
         }
 
-        return string.Join(ParagraphSeparator, promptParts);
+        return new NormalizedInput(string.Join(ParagraphSeparator, promptParts));
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) == 1, nameof(ClaudeThread));
+
+    private readonly record struct NormalizedInput(string Prompt);
 }

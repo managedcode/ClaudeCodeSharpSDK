@@ -50,6 +50,7 @@ internal static class TestConstants
     public const string TextPropertyName = "text";
     public const string TestsDirectoryName = "tests";
     public const string ToolsPropertyName = "tools";
+    public const string OkStatusValue = "ok";
     public const string TrueString = "true";
     public const string TotalCostUsdPropertyName = "total_cost_usd";
     public const string TypePropertyName = "type";

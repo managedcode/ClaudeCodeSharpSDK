@@ -81,6 +81,10 @@ If no new rule is detected -> do not update the file.
   - in scope
   - out of scope
 - Keep context minimal and relevant; do not scan the whole repository unless required.
+- When adding a feature that already exists in a sibling ManagedCode SDK repository, inspect that repository first and prefer the same minimal shape; do not introduce extra abstraction layers unless Claude-specific constraints require them.
+- Use the neighboring `CodexSharp` repository as the structural baseline for refactors in this project; if `ClaudeCodeSharpSDK` looks more complicated without a verified Claude-specific reason, simplify it toward the Codex shape.
+- Apply the same CodexSharp-baseline refactor rule to the core Claude client/runtime implementation (`ClaudeClient`, `ClaudeThread`, `ClaudeExec`, options, metadata helpers), not only optional adapter packages.
+- Apply the same CodexSharp-baseline refactor rule to the full test layer as well; test structure, helpers, and coverage shape should stay as close as possible to CodexSharp unless Claude-specific behavior requires a difference.
 - Update docs for every behavior or architecture change:
   - `docs/Features/*` for behavior
   - `docs/ADR/*` for design/architecture decisions
@@ -241,3 +245,5 @@ If no new rule is detected -> do not update the file.
 - Custom logging abstractions when `ILogger` already solves the integration use case.
 - Performance tests that exercise only one parser payload and do not cover supported parsing branches.
 - Example code scattered across standalone sample projects instead of `README.md`.
+- Overengineered new layers when a simpler neighboring ManagedCode SDK already demonstrates the same feature shape.
+- Repository-wide overengineering in Claude-specific code when the same concern is simpler in `CodexSharp`.
