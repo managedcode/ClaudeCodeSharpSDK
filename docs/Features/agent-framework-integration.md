@@ -21,6 +21,7 @@ Enable ClaudeCodeSharpSDK consumers to use Microsoft Agent Framework (`AIAgent`)
 - DI helpers `AddClaudeCodeAgent()` and `AddKeyedClaudeCodeAgent()`
 - composition of `ClaudeChatClient` with `Microsoft.Agents.AI` `ChatClientAgent`
 - README and docs updates showing direct `AsAIAgent(...)` and DI usage
+- prerelease package publishing while upstream `Microsoft.Agents.AI` remains prerelease
 
 ### Out of scope
 
@@ -38,6 +39,7 @@ Enable ClaudeCodeSharpSDK consumers to use Microsoft Agent Framework (`AIAgent`)
 4. `AddKeyedClaudeCodeAgent()` MUST register keyed `IChatClient` and keyed `AIAgent` using the same service key.
 5. Agent configuration supplied through `ChatClientAgentOptions` MUST flow into the created agent without mutating Claude-specific chat client defaults.
 6. Claude provider metadata exposed through `ChatClientMetadata` MUST remain available from the agent-resolved chat client.
+7. `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` MUST be published as a prerelease package while its upstream `Microsoft.Agents.AI` dependency is prerelease.
 
 ---
 
@@ -120,6 +122,7 @@ flowchart LR
 ## Definition of Done
 
 - `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` exists as a separate opt-in package
+- the package is published with a prerelease suffix while `Microsoft.Agents.AI` remains prerelease
 - direct `ClaudeChatClient` + `AsAIAgent(...)` usage is documented in `README.md`
 - DI helpers register non-keyed and keyed `AIAgent` instances over Claude chat clients
 - automated tests cover happy path and keyed-edge path registration behaviour

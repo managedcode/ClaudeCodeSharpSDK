@@ -41,9 +41,11 @@ Keep package quality and upstream Claude Code CLI parity automatically verified 
 - Release workflow must read package version from `Directory.Build.props`.
 - Release workflow must validate semantic version format before packaging.
 - Test-only PRs, including PRs that only adjust submodule-backed upstream reference/tests and do not change SDK production code, must not trigger a package version bump; those changes are committed without creating a new release version.
-- Release workflow must pack and publish both NuGet packages:
+- Release workflow must pack and publish all NuGet packages:
   - `ManagedCode.ClaudeCodeSharpSDK`
   - `ManagedCode.ClaudeCodeSharpSDK.Extensions.AI`
+  - `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework`
+- Release workflow must treat `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` as a package-specific prerelease (`<Version>-rc4`) while core and `Extensions.AI` remain on the stable repository version.
 - Release workflow must use generated GitHub release notes.
 - Release workflow must create/push git tag `v<version>` before publishing GitHub release.
 - Claude Code CLI watch runs daily and opens an issue when upstream `anthropics/claude-code` changed since the pinned submodule SHA.

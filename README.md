@@ -52,7 +52,7 @@ dotnet add package ManagedCode.ClaudeCodeSharpSDK.Extensions.AI
 Optional Microsoft Agent Framework adapter:
 
 ```bash
-dotnet add package ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework
+dotnet add package ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework --prerelease
 ```
 
 ## Prerequisites
@@ -201,6 +201,7 @@ Console.WriteLine(result.FinalResponse);
 ## Microsoft Agent Framework
 
 `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` is a thin Microsoft Agent Framework package over the existing `ClaudeChatClient`.
+It is currently published as a prerelease package because the upstream `Microsoft.Agents.AI` dependency is still prerelease.
 
 ```csharp
 using ManagedCode.ClaudeCodeSharpSDK.Extensions.AI;

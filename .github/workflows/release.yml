@@ -103,6 +103,7 @@ jobs:
       run: |
         dotnet pack ClaudeCodeSharpSDK/ClaudeCodeSharpSDK.csproj --configuration Release --no-build -p:IncludeSymbols=false -p:SymbolPackageFormat=snupkg --output ./artifacts
         dotnet pack ClaudeCodeSharpSDK.Extensions.AI/ClaudeCodeSharpSDK.Extensions.AI.csproj --configuration Release --no-build -p:IncludeSymbols=false -p:SymbolPackageFormat=snupkg --output ./artifacts
+        dotnet pack ClaudeCodeSharpSDK.Extensions.AgentFramework/ClaudeCodeSharpSDK.Extensions.AgentFramework.csproj --configuration Release --no-build -p:IncludeSymbols=false -p:SymbolPackageFormat=snupkg --output ./artifacts
 
     - name: Validate packaged version
       shell: bash
@@ -119,8 +120,18 @@ jobs:
         for package in "${packages[@]}"; do
           file_name=$(basename "$package")
           echo "Validating $file_name"
-          if [[ "$file_name" != *".${VERSION}.nupkg" ]]; then
-            echo "Package version mismatch: expected filename to end with .${VERSION}.nupkg"
+
+          case "$file_name" in
+            ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework.*.nupkg)
+              expected_suffix=".${VERSION}-rc4.nupkg"
+              ;;
+            *)
+              expected_suffix=".${VERSION}.nupkg"
+              ;;
+          esac
+
+          if [[ "$file_name" != *"${expected_suffix}" ]]; then
+            echo "Package version mismatch: expected filename to end with ${expected_suffix}"
             exit 1
           fi
         done
@@ -259,6 +270,7 @@ jobs:
 
         - [ManagedCode.ClaudeCodeSharpSDK v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK/$VERSION)
         - [ManagedCode.ClaudeCodeSharpSDK.Extensions.AI v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK.Extensions.AI/$VERSION)
+        - [ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework v$VERSION-rc4](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework/$VERSION-rc4)
         EOF
         )
 
@@ -282,6 +294,7 @@ jobs:
             esac
           done
 
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES"
           gh release upload "$TAG" "${packages[@]}" --repo "$GITHUB_REPOSITORY" --clobber
         else
           gh release create "$TAG" "${packages[@]}" \
