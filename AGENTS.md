@@ -94,6 +94,7 @@ If no new rule is detected -> do not update the file.
 - Do not keep or add public sample projects; repository focus is SDK + tests only.
 - Upstream sync automation must track real `anthropics/claude-code` CLI changes (flags/models/features), not TypeScript SDK surface diffs, and open actionable repository issues for required SDK follow-up.
 - Automatically opened upstream sync issues must include change summary/checklist and assign Copilot by default.
+- Release workflow must pack and publish every NuGet package that belongs to this repository; do not leave repository packages out of workflow publishing.
 - Run verification in this order:
   - focused tests for changed behavior
   - full solution tests
