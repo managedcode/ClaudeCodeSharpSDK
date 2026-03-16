@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>.NET Microsoft Agent Framework adapter for ClaudeCodeSharpSDK, providing AIAgent integration.</Description>
+    <PackageDescription>$(Description)</PackageDescription>
+    <PackageVersion>$(Version)-rc4</PackageVersion>
     <PackageId>ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework</PackageId>
     <RootNamespace>ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework</RootNamespace>
     <AssemblyName>ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework</AssemblyName>
