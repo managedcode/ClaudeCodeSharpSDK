@@ -10,11 +10,13 @@ public static class ClaudeModels
     private const string ClaudeHaiku35DisplayName = "Claude Haiku 3.5";
     private const string ClaudeHaiku35SnapshotDisplayName = "Claude Haiku 3.5 (2024-10-22)";
     private const string ClaudeHaiku3DisplayName = "Claude Haiku 3";
+    private const string ClaudeOpus46AliasDisplayName = "Claude Opus 4.6";
     private const string ClaudeOpus45AliasDisplayName = "Claude Opus 4.5";
     private const string ClaudeOpus45SnapshotDisplayName = "Claude Opus 4.5 (2025-11-01)";
     private const string ClaudeOpus41AliasDisplayName = "Claude Opus 4.1";
     private const string ClaudeOpus41SnapshotDisplayName = "Claude Opus 4.1 (2025-08-05)";
     private const string ClaudeOpus40DisplayName = "Claude Opus 4";
+    private const string ClaudeSonnet46AliasDisplayName = "Claude Sonnet 4.6";
     private const string ClaudeSonnet45DisplayName = "Claude Sonnet 4.5";
     private const string ClaudeSonnet45SnapshotDisplayName = "Claude Sonnet 4.5 (2025-09-29)";
     private const string ClaudeSonnet40DisplayName = "Claude Sonnet 4";
@@ -34,6 +36,8 @@ public static class ClaudeModels
     public const string ClaudeSonnet45 = "claude-sonnet-4-5-20250929";
     public const string ClaudeHaiku45Alias = "claude-haiku-4-5";
     public const string ClaudeHaiku45 = "claude-haiku-4-5-20251001";
+    public const string ClaudeOpus46Alias = "claude-opus-4-6";
+    public const string ClaudeSonnet46Alias = "claude-sonnet-4-6";
     public const string ClaudeOpus45Alias = "claude-opus-4-5";
     public const string ClaudeOpus45 = "claude-opus-4-5-20251101";
     public const string ClaudeOpus41Alias = "claude-opus-4-1";
@@ -56,6 +60,8 @@ public static class ClaudeModels
         new(Sonnet, Sonnet, LatestSonnetDescription, true),
         new(Opus, Opus, LatestOpusDescription, true),
         new(Haiku, Haiku, LatestHaikuDescription, true),
+        new(ClaudeOpus46Alias, ClaudeOpus46AliasDisplayName, null, true),
+        new(ClaudeSonnet46Alias, ClaudeSonnet46AliasDisplayName, null, true),
         new(ClaudeSonnet45Alias, ClaudeSonnet45DisplayName, null, true),
         new(ClaudeSonnet45, ClaudeSonnet45SnapshotDisplayName, null, true),
         new(ClaudeHaiku45Alias, ClaudeHaiku45DisplayName, null, true),

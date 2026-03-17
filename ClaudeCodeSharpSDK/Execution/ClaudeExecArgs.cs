@@ -47,6 +47,8 @@ public sealed record ClaudeExecArgs
 
     public string? SessionId { get; init; }
 
+    public string? SessionName { get; init; }
+
     public bool ForkSession { get; init; }
 
     public bool NoSessionPersistence { get; init; }

@@ -34,6 +34,8 @@ public class ClaudeExecTests
     private const string HealthCheckInput = "Health check";
     private const string HooksKey = "hooks";
     private const string InputFormatFlag = "--input-format";
+    private const string NameFlag = "--name";
+    private const string SessionNameValue = "my-session";
     private const string MaxBudgetFlag = "--max-budget-usd";
     private const string MaxBudgetValue = "0.25";
     private const string McpConfigFlag = "--mcp-config";
@@ -204,6 +206,33 @@ public class ClaudeExecTests
 
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
         await Assert.That(exception!.Message).Contains(ReservedOutputFormatFlag);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithSessionName_IncludesNameFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            SessionName = SessionNameValue,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, NameFlag)).IsEqualTo(SessionNameValue);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithoutSessionName_DoesNotIncludeNameFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+        });
+
+        await Assert.That(FindFlagIndex(commandArgs, NameFlag)).IsEqualTo(-1);
     }
 
     private static JsonObject CreateBaseSettings()
