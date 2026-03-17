@@ -26,6 +26,11 @@ public class ClaudeExecTests
     private const string DescriptionPropertyName = "Description";
     private const string DescriptionPropertyNameCamel = "description";
     private const string DisallowedToolsFlag = "--disallowed-tools";
+    private const string EffortFlag = "--effort";
+    private const string EffortHighValue = "high";
+    private const string EffortLowValue = "low";
+    private const string EffortMaxValue = "max";
+    private const string EffortMediumValue = "medium";
     private const string ExampleBaseUrl = "https://example.invalid";
     private const string FeatureABeta = "feature-a";
     private const string FeatureBBeta = "feature-b";
@@ -41,6 +46,7 @@ public class ClaudeExecTests
     private const string McpConfigPath = "/tmp/mcp.json";
     private const string McpConfigTwo = """{"name":"two","command":"uvx","args":["c","d"]}""";
     private const string ModelFlag = "--model";
+    private const string NameFlag = "--name";
     private const string OutputFormatFlag = "--output-format";
     private const string OutputSchemaMessageFragment = "ReplayUserMessages";
     private const string PerTurnHookValue = "per-turn-hook";
@@ -59,6 +65,7 @@ public class ClaudeExecTests
     private const string ResumeSessionId = "session-1";
     private const string ReviewerAgentKey = "reviewer";
     private const string ReviewerPrompt = "Review code changes";
+    private const string SessionDisplayName = "my-session";
     private const string SettingSourcesFlag = "--setting-sources";
     private const string SettingsFlag = "--settings";
     private const string StreamJsonOutputFormat = "stream-json";
@@ -204,6 +211,64 @@ public class ClaudeExecTests
 
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
         await Assert.That(exception!.Message).Contains(ReservedOutputFormatFlag);
+    }
+
+    [Test]
+    [Arguments(EffortLevel.Low, EffortLowValue)]
+    [Arguments(EffortLevel.Medium, EffortMediumValue)]
+    [Arguments(EffortLevel.High, EffortHighValue)]
+    [Arguments(EffortLevel.Max, EffortMaxValue)]
+    public async Task BuildCommandArgs_WithEffort_MapsToCliValue(EffortLevel effort, string expectedCliValue)
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            Effort = effort,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, EffortFlag)).IsEqualTo(expectedCliValue);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithoutEffort_OmitsEffortFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+        });
+
+        await Assert.That(commandArgs.Contains(EffortFlag)).IsFalse();
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithName_MapsToCliFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            Name = SessionDisplayName,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, NameFlag)).IsEqualTo(SessionDisplayName);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithoutName_OmitsNameFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+        });
+
+        await Assert.That(commandArgs.Contains(NameFlag)).IsFalse();
     }
 
     private static JsonObject CreateBaseSettings()

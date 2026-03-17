@@ -14,6 +14,14 @@ internal static class ClaudeCliValueExtensions
         public const string Plan = "plan";
     }
 
+    private static class EffortLevelValues
+    {
+        public const string Low = "low";
+        public const string Medium = "medium";
+        public const string High = "high";
+        public const string Max = "max";
+    }
+
     private static class SettingSourceValues
     {
         public const string User = "user";
@@ -32,6 +40,18 @@ internal static class ClaudeCliValueExtensions
             PermissionMode.DontAsk => PermissionModeValues.DontAsk,
             PermissionMode.Plan => PermissionModeValues.Plan,
             _ => throw new ArgumentOutOfRangeException(nameof(permissionMode), permissionMode, null),
+        };
+    }
+
+    public static string ToCliValue(this EffortLevel effortLevel)
+    {
+        return effortLevel switch
+        {
+            EffortLevel.Low => EffortLevelValues.Low,
+            EffortLevel.Medium => EffortLevelValues.Medium,
+            EffortLevel.High => EffortLevelValues.High,
+            EffortLevel.Max => EffortLevelValues.Max,
+            _ => throw new ArgumentOutOfRangeException(nameof(effortLevel), effortLevel, null),
         };
     }
 

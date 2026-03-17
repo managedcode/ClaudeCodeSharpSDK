@@ -12,6 +12,14 @@ public enum PermissionMode
     Plan,
 }
 
+public enum EffortLevel
+{
+    Low,
+    Medium,
+    High,
+    Max,
+}
+
 public enum SettingSource
 {
     User,
@@ -25,9 +33,13 @@ public sealed record ThreadOptions
 {
     public string? Model { get; init; }
 
+    public string? Name { get; init; }
+
     public string? Agent { get; init; }
 
     public string? FallbackModel { get; init; }
+
+    public EffortLevel? Effort { get; init; }
 
     public string? WorkingDirectory { get; init; }
 

@@ -13,9 +13,13 @@ public sealed record ClaudeExecArgs
 
     public string? Model { get; init; }
 
+    public string? Name { get; init; }
+
     public string? Agent { get; init; }
 
     public string? FallbackModel { get; init; }
+
+    public EffortLevel? Effort { get; init; }
 
     public string? WorkingDirectory { get; init; }
 
