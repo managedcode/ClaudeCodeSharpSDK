@@ -29,6 +29,11 @@ public class ClaudeExecTests
     private const string ExampleBaseUrl = "https://example.invalid";
     private const string FeatureABeta = "feature-a";
     private const string FeatureBBeta = "feature-b";
+    private const string EffortFlag = "--effort";
+    private const string EffortLow = "low";
+    private const string EffortMedium = "medium";
+    private const string EffortHigh = "high";
+    private const string EffortAuto = "auto";
     private const string FlagNotFoundMessagePrefix = "Flag '";
     private const string FlagNotFoundMessageSuffix = "' was not found.";
     private const string HealthCheckInput = "Health check";
@@ -204,6 +209,75 @@ public class ClaudeExecTests
 
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
         await Assert.That(exception!.Message).Contains(ReservedOutputFormatFlag);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithEffortLow_SetsEffortFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            Effort = EffortLevel.Low,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, EffortFlag)).IsEqualTo(EffortLow);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithEffortMedium_SetsEffortFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            Effort = EffortLevel.Medium,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, EffortFlag)).IsEqualTo(EffortMedium);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithEffortHigh_SetsEffortFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            Effort = EffortLevel.High,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, EffortFlag)).IsEqualTo(EffortHigh);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithEffortAuto_SetsEffortFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            Effort = EffortLevel.Auto,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, EffortFlag)).IsEqualTo(EffortAuto);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithoutEffort_OmitsEffortFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+        });
+
+        await Assert.That(commandArgs.Contains(EffortFlag)).IsFalse();
     }
 
     private static JsonObject CreateBaseSettings()
