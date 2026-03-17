@@ -51,6 +51,7 @@ public sealed class ClaudeExec
     private const string BetasFlag = "--betas";
     private const string AgentsFlag = "--agents";
     private const string VerboseFlag = "--verbose";
+    private const string NameFlag = "--name";
 
     private const string StreamJsonFormat = "stream-json";
     private const string TextFormat = "text";
@@ -282,6 +283,12 @@ public sealed class ClaudeExec
             var inlineAgents = args.InlineAgents as Dictionary<string, InlineAgentDefinition>
                                ?? args.InlineAgents.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
             commandArgs.Add(JsonSerializer.Serialize(inlineAgents, ClaudeJsonSerializerContext.Default.DictionaryStringInlineAgentDefinition));
+        }
+
+        if (!string.IsNullOrWhiteSpace(args.SessionName))
+        {
+            commandArgs.Add(NameFlag);
+            commandArgs.Add(args.SessionName);
         }
 
         if (args.AdditionalCliArguments is not null)

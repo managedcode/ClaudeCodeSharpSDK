@@ -72,6 +72,8 @@ public class ClaudeExecTests
     private const string TmpDirectory = "/tmp";
     private const string UserProjectSettingSources = "user,project";
     private const string VerboseFlag = "--verbose";
+    private const string NameFlag = "--name";
+    private const string SessionDisplayName = "My review session";
     private const string WriteToolName = "Write";
     private static readonly string[] AdditionalDirectories = [RepoDirectory, TmpDirectory];
     private static readonly string[] AllowedTools = [ReadToolName, WriteToolName];
@@ -157,6 +159,33 @@ public class ClaudeExecTests
         await Assert.That(GetAllFlagValues(commandArgs, AddDirectoryFlag)).IsEquivalentTo(AdditionalDirectories);
         await Assert.That(GetAllFlagValues(commandArgs, McpConfigFlag)).IsEquivalentTo(McpConfigs);
         await Assert.That(GetAllFlagValues(commandArgs, BetasFlag)).IsEquivalentTo(BetaFlags);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithSessionName_IncludesNameFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+            SessionName = SessionDisplayName,
+        });
+
+        await Assert.That(GetRequiredFlagValue(commandArgs, NameFlag)).IsEqualTo(SessionDisplayName);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithoutSessionName_OmitsNameFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = SummarizeInput,
+        });
+
+        await Assert.That(commandArgs.Contains(NameFlag)).IsFalse();
     }
 
     [Test]
