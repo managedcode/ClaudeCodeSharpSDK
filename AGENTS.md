@@ -134,6 +134,7 @@ If no new rule is detected -> do not update the file.
 - CI/release full-solution runs must exclude auth-required tests using `-- --treenode-filter "/*/*/*/*[RequiresClaudeAuth!=true]"` so pipelines remain non-auth and deterministic.
 - Cross-platform non-auth smoke must run `claude` from local installation in CI and verify unauthenticated behavior explicitly (for example `claude auth status` or `claude -p` in an isolated profile returns an authentication failure), proving binary discovery + process launch on each platform.
 - Real Claude integration tests must rely on existing local Claude Code CLI login/session only; do not read or require `ANTHROPIC_API_KEY` in test setup.
+- For authenticated local Claude integration tests, prefer the cheapest verified Claude model available in the current CLI/account unless the scenario explicitly requires a stronger model, to keep local validation costs down.
 - Do not use nullable `TryGetSettings()` + early `return` skip patterns in authenticated local integration tests; resolve required settings directly and fail fast with actionable errors when missing.
 - Do not bypass integration tests on Windows with unconditional early returns; keep tests cross-platform for supported Claude Code CLI environments.
 - Parser changes require tests in `ThreadEventParserTests` for supported and invalid payloads.
