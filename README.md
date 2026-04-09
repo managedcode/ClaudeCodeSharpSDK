@@ -198,6 +198,14 @@ var result = await thread.RunAsync("Continue from the previous plan.");
 Console.WriteLine(result.FinalResponse);
 ```
 
+Claude Code persists SDK print-mode sessions by default. Unless you set `NoSessionPersistence = true`, the session transcript is written under `~/.claude/projects/.../<session-id>.jsonl` and can be resumed later by session id.
+
+```bash
+claude --resume <session-id>
+```
+
+Claude stores those sessions in project-scoped directories derived from the working directory, so external CLI/App resume should use the same `WorkingDirectory` or project that created the session. The SDK guarantees persistence and resume-by-id; whether a non-interactive `-p` session is shown in the default Claude history/resume picker is controlled by the Claude CLI/App itself.
+
 ## Microsoft Agent Framework
 
 `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` is a thin Microsoft Agent Framework package over the existing `ClaudeChatClient`.

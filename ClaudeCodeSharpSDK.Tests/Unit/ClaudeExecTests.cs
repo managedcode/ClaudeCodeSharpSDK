@@ -41,6 +41,7 @@ public class ClaudeExecTests
     private const string McpConfigPath = "/tmp/mcp.json";
     private const string McpConfigTwo = """{"name":"two","command":"uvx","args":["c","d"]}""";
     private const string ModelFlag = "--model";
+    private const string NoSessionPersistenceFlag = "--no-session-persistence";
     private const string OutputFormatFlag = "--output-format";
     private const string OutputSchemaMessageFragment = "ReplayUserMessages";
     private const string PerTurnHookValue = "per-turn-hook";
@@ -174,6 +175,20 @@ public class ClaudeExecTests
         await Assert.That(environment[ClaudeTestEnvironmentVariable]).IsEqualTo(PresentValue);
         await Assert.That(environment[AnthropicBaseUrlEnvironmentVariable]).IsEqualTo(ExampleBaseUrl);
         await Assert.That(environment[AnthropicApiKeyEnvironmentVariable]).IsEqualTo(TestApiKey);
+    }
+
+    [Test]
+    public async Task BuildCommandArgs_WithNoSessionPersistence_EmitsFlag()
+    {
+        var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);
+
+        var commandArgs = exec.BuildCommandArgs(new ClaudeExecArgs
+        {
+            Input = HealthCheckInput,
+            NoSessionPersistence = true,
+        });
+
+        await Assert.That(commandArgs.Contains(NoSessionPersistenceFlag)).IsTrue();
     }
 
     [Test]

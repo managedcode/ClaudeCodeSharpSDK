@@ -26,6 +26,7 @@ public partial class ClaudeThreadTests
     private const string JsonSchemaFlag = "--json-schema";
     private const string MessageRoleAssistant = "assistant";
     private const string MessageType = "message";
+    private const string NoSessionPersistenceFlag = "--no-session-persistence";
     private const string OkText = "ok";
     private const string OutputSchemaMessageFragment = "OutputSchema";
     private const string OutputStyleDefault = "default";
@@ -127,6 +128,22 @@ public partial class ClaudeThreadTests
         var resumeFlagIndex = runner.Invocations[0].Arguments.IndexOf(ResumeFlag);
         await Assert.That(resumeFlagIndex).IsGreaterThan(-1);
         await Assert.That(runner.Invocations[0].Arguments[resumeFlagIndex + 1]).IsEqualTo(SessionId);
+    }
+
+    [Test]
+    public async Task RunAsync_WithNoSessionPersistence_PropagatesFlag()
+    {
+        var runner = new FakeClaudeProcessRunner(
+            CreateSystemInitLine(SessionId, [], FirstEventId),
+            CreateResultLine(SessionId, FinalAnswerText, SecondEventId, durationMs: 8, durationApiMs: 7, totalCostUsd: 0m, inputTokens: 3, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, outputTokens: 2));
+        using var thread = CreateThread(runner, new ThreadOptions
+        {
+            NoSessionPersistence = true,
+        });
+
+        _ = await thread.RunAsync(HelloClaudeInput);
+
+        await Assert.That(runner.Invocations[0].Arguments.Contains(NoSessionPersistenceFlag)).IsTrue();
     }
 
     private static ClaudeThread CreateThread(FakeClaudeProcessRunner runner, ThreadOptions? threadOptions = null)

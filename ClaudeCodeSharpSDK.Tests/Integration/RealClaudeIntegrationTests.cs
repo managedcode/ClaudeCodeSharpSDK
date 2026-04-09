@@ -10,6 +10,7 @@ public class RealClaudeIntegrationTests
 {
     private const string AgainStatusOnlyPrompt = "Again: reply with a JSON object where status is exactly \"ok\".";
     private const string PlainTextOkPrompt = "Reply with short plain text: ok.";
+    private static readonly TimeSpan PersistenceDetectionTimeout = TimeSpan.FromSeconds(10);
     private const string StatusOnlyPrompt = "Reply with a JSON object where status is exactly \"ok\".";
     private static readonly TimeSpan TestTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan TwoTurnTimeout = TimeSpan.FromMinutes(3);
@@ -93,6 +94,55 @@ public class RealClaudeIntegrationTests
         await Assert.That(second.TypedResponse.Status).IsEqualTo(TestConstants.OkStatusValue);
         await Assert.That(second.Usage).IsNotNull();
         await Assert.That(thread.Id).IsEqualTo(firstThreadId);
+    }
+
+    [Test]
+    public async Task RunAsync_WithSessionPersistenceEnabled_PersistsSessionAndAllowsFreshClientResume()
+    {
+        var settings = RealClaudeTestSupport.GetRequiredSettings();
+        var workingDirectory = RealClaudeTestSupport.ResolveRepositoryRootPath();
+
+        using var client = RealClaudeTestSupport.CreateClient();
+        using var thread = client.StartThread(new ThreadOptions
+        {
+            Model = settings.Model,
+            DangerouslySkipPermissions = true,
+            WorkingDirectory = workingDirectory,
+        });
+        using var cancellation = new CancellationTokenSource(TwoTurnTimeout);
+        var schema = IntegrationOutputSchemas.StatusOnly();
+
+        var first = await thread.RunAsync(
+            PlainTextOkPrompt,
+            new TurnOptions { CancellationToken = cancellation.Token });
+
+        var threadId = thread.Id;
+        await Assert.That(first.Usage).IsNotNull();
+        await Assert.That(threadId).IsNotNull();
+
+        var persistedSessionPath = await RealClaudeTestSupport.FindPersistedSessionPathAsync(
+            threadId!,
+            PersistenceDetectionTimeout);
+
+        await Assert.That(persistedSessionPath).IsNotNull();
+
+        using var resumedClient = RealClaudeTestSupport.CreateClient();
+        using var resumedThread = resumedClient.ResumeThread(threadId!, new ThreadOptions
+        {
+            Model = settings.Model,
+            DangerouslySkipPermissions = true,
+            WorkingDirectory = workingDirectory,
+        });
+
+        var resumed = await resumedThread.RunAsync<StatusResponse>(
+            StatusOnlyPrompt,
+            schema,
+            IntegrationOutputJsonContext.Default.StatusResponse,
+            cancellation.Token);
+
+        await Assert.That(resumed.TypedResponse.Status).IsEqualTo(TestConstants.OkStatusValue);
+        await Assert.That(resumed.Usage).IsNotNull();
+        await Assert.That(resumedThread.Id).IsEqualTo(threadId);
     }
 
     private static ClaudeThread StartRealIntegrationThread(ClaudeClient client, string model)

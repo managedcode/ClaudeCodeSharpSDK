@@ -53,6 +53,9 @@ The upstream reference repository `anthropics/claude-code` is tracked in this re
 - `TurnOptions.ReplayUserMessages` is currently rejected because the SDK only supports text input, not Claude stream-json input mode.
 - Claude executable resolution is deterministic: prefer npm-vendored CLI entry or `node_modules/.bin/claude`, then PATH lookup; on Windows PATH lookup checks `claude.exe`, `claude.cmd`, `claude.bat`, then `claude`.
 - Thread options map current Claude Code print-mode flags (`--model`, `--permission-mode`, tool allow/deny lists, system prompts, MCP config, resume/session flags, budget, settings, plugins, betas), plus raw `AdditionalCliArguments` passthrough for future non-transport flags. SDK-managed transport flags are reserved and rejected if passed manually.
+- SDK print-mode sessions persist by default because the SDK only emits `--no-session-persistence` when the caller explicitly sets `ThreadOptions.NoSessionPersistence = true`.
+- Persisted print-mode sessions are stored by Claude under project-scoped directories in `~/.claude/projects/.../<session-id>.jsonl`; external CLI/App resume should use the same working directory or project scope that created the session.
+- The SDK guarantees persisted session ids plus resume-by-id; whether a non-interactive print-mode session appears in Claude's default history or resume picker depends on Claude CLI/App behavior rather than an SDK-specific storage format.
 - Execution failures are surfaced to the caller with the raw Claude event context preserved in exception chains where available.
 
 ---
