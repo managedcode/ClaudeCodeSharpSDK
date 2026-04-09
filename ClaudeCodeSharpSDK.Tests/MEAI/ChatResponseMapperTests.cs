@@ -33,4 +33,13 @@ public class ChatResponseMapperTests
         await Assert.That(response.Usage).IsNull();
         await Assert.That(response.ConversationId).IsNull();
     }
+
+    [Test]
+    public async Task ToChatResponse_PreservesReportedZeroCachedTokens()
+    {
+        var response = ChatResponseMapper.ToChatResponse(new RunResult([], AssistantResponseText, new Usage(100, 0, 0, 40)), ThreadId);
+
+        await Assert.That(response.Usage).IsNotNull();
+        await Assert.That(response.Usage!.CachedInputTokenCount).IsEqualTo(0);
+    }
 }

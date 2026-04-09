@@ -44,6 +44,7 @@ The repository's upstream sync workflow separately tracks source changes in `ant
 - Metadata read is read-only and does not mutate local Claude state.
 - SDK option and metadata decisions are based on real Claude Code CLI behavior, not any separate SDK surface.
 - Update check failures (for example missing `git` or network access) must return actionable status messages and never silently fail.
+- Version/update probes must drain subprocess stdout and stderr concurrently so CLI metadata reads cannot deadlock on buffered process output.
 - The upstream sync watcher must raise a repository issue when `anthropics/claude-code` moves ahead of the pinned submodule SHA.
 
 ---

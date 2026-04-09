@@ -95,6 +95,7 @@ If no new rule is detected -> do not update the file.
 - Upstream sync automation must track real `anthropics/claude-code` CLI changes (flags/models/features), not TypeScript SDK surface diffs, and open actionable repository issues for required SDK follow-up.
 - Automatically opened upstream sync issues must include change summary/checklist and must not auto-assign Copilot by default.
 - Release workflow must pack and publish every NuGet package that belongs to this repository; do not leave repository packages out of workflow publishing.
+- `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` uses the same stable repository version as the other packages; do not add package-specific prerelease suffixes.
 - Run verification in this order:
   - focused tests for changed behavior
   - full solution tests
@@ -162,6 +163,7 @@ If no new rule is detected -> do not update the file.
 - Never use empty/silent `catch` blocks; every caught exception must be either logged with context or rethrown with context.
 - Never add fake fallback calls/mocks in production paths; unsupported runtime cases must fail explicitly with actionable errors.
 - No magic literals: extract constants/enums/config values.
+- Do not add one-off custom MSBuild helper properties for obvious version suffix wiring when a simpler direct project/workflow binding is enough; keep release metadata plumbing minimal and easy to review.
 - In SDK production code, do not inline string literals in implementation logic; promote them to named constants (paths, env vars, command names, switch/comparison tokens) for reviewability and consistency.
 - Outside constant declarations themselves, do not use inline string literals in C# code; every implementation/test string value must be routed through a named constant for consistency during review and refactoring.
 - Do not inline filesystem/path segment string literals in implementation logic; define named constants and reuse them.

@@ -10,6 +10,7 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 internal static class RealClaudeTestSupport
 {
     private const string AuthCommandName = "auth";
+    private const string HaikuToken = "haiku";
     private const string StatusCommandName = "status";
     private const string ClaudeDirectoryName = ".claude";
     private const string AuthenticationRequiredMessage =
@@ -20,6 +21,7 @@ internal static class RealClaudeTestSupport
     private const string JsonLinesFileExtension = ".jsonl";
     private const string LoggedInPropertyName = "loggedIn";
     private const string ModelEnvironmentVariable = "CLAUDE_TEST_MODEL";
+    private const string SonnetToken = "sonnet";
     private const string ProjectsDirectoryName = "projects";
     private const int AuthenticationProbeTimeoutMilliseconds = 60000;
     private const string TerminateFailureMessagePrefix = "Failed to terminate timed-out Claude auth probe process: ";
@@ -115,9 +117,13 @@ internal static class RealClaudeTestSupport
     private static string ResolveModel(string executablePath)
     {
         var configuredModel = Environment.GetEnvironmentVariable(ModelEnvironmentVariable);
-        return string.IsNullOrWhiteSpace(configuredModel)
-            ? ClaudeCliMetadataReader.Read(executablePath).DefaultModel ?? ClaudeModels.Sonnet
-            : configuredModel!;
+        if (!string.IsNullOrWhiteSpace(configuredModel))
+        {
+            return configuredModel!;
+        }
+
+        var metadata = ClaudeCliMetadataReader.Read(executablePath);
+        return SelectPreferredTestModel(metadata);
     }
 
     private static bool TryResolveExecutablePath(out string executablePath)
@@ -201,6 +207,41 @@ internal static class RealClaudeTestSupport
         {
             return new AuthenticationProbeResult(executablePath, false);
         }
+    }
+
+    private static string SelectPreferredTestModel(ClaudeCliMetadata metadata)
+    {
+        var defaultModel = metadata.DefaultModel;
+        if (!string.IsNullOrWhiteSpace(defaultModel)
+            && defaultModel.Contains(HaikuToken, StringComparison.OrdinalIgnoreCase))
+        {
+            return defaultModel;
+        }
+
+        if (metadata.Models.Any(
+                static model => string.Equals(model.Slug, ClaudeModels.Haiku, StringComparison.OrdinalIgnoreCase)))
+        {
+            return ClaudeModels.Haiku;
+        }
+
+        if (!string.IsNullOrWhiteSpace(defaultModel)
+            && defaultModel.Contains(SonnetToken, StringComparison.OrdinalIgnoreCase))
+        {
+            return defaultModel;
+        }
+
+        if (metadata.Models.Any(
+                static model => string.Equals(model.Slug, ClaudeModels.Sonnet, StringComparison.OrdinalIgnoreCase)))
+        {
+            return ClaudeModels.Sonnet;
+        }
+
+        if (!string.IsNullOrWhiteSpace(defaultModel))
+        {
+            return defaultModel;
+        }
+
+        return ClaudeModels.Sonnet;
     }
 
     private static void TryTerminate(Process process)

@@ -8,6 +8,7 @@ public class StructuredOutputSchemaTests
     private const string BlankPropertyName = " ";
     private const string BooleanSchemaType = "boolean";
     private const string MustExistInSchemaPropertiesMessageFragment = "must exist in schema properties";
+    private const string MultiLinePropertyName = "Status\nCode";
     private const string NumberSchemaType = "number";
     private const string ObjectSchemaType = "object";
     private const string PropertiesPropertyName = "properties";
@@ -73,5 +74,20 @@ public class StructuredOutputSchemaTests
 
         var exception = await Assert.That(action).ThrowsException();
         await Assert.That(exception).IsTypeOf<ArgumentException>();
+    }
+
+    [Test]
+    public async Task Object_AllowsRequiredPropertyNamesWithControlCharacters()
+    {
+        var schema = StructuredOutputSchema.Map(
+            new Dictionary<string, StructuredOutputSchema>
+            {
+                [MultiLinePropertyName] = StructuredOutputSchema.PlainText(),
+            },
+            required: [MultiLinePropertyName]);
+
+        var json = schema.ToJsonObject();
+
+        await Assert.That(json[RequiredPropertyName]![0]!.GetValue<string>()).IsEqualTo(MultiLinePropertyName);
     }
 }

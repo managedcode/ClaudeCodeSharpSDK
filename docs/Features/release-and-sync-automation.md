@@ -45,7 +45,7 @@ Keep package quality and upstream Claude Code CLI parity automatically verified 
   - `ManagedCode.ClaudeCodeSharpSDK`
   - `ManagedCode.ClaudeCodeSharpSDK.Extensions.AI`
   - `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework`
-- Release workflow must treat `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` as a package-specific prerelease (`<Version>-rc4`) while core and `Extensions.AI` remain on the stable repository version.
+- Release workflow must publish `ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework` on the same stable repository version as core and `Extensions.AI`.
 - Release workflow must use generated GitHub release notes.
 - Release workflow must create/push git tag `v<version>` before publishing GitHub release.
 - Claude Code CLI watch runs daily and opens an issue when upstream `anthropics/claude-code` changed since the pinned submodule SHA.

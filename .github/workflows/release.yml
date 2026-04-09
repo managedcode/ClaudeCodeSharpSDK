@@ -121,14 +121,7 @@ jobs:
           file_name=$(basename "$package")
           echo "Validating $file_name"
 
-          case "$file_name" in
-            ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework.*.nupkg)
-              expected_suffix=".${VERSION}-rc4.nupkg"
-              ;;
-            *)
-              expected_suffix=".${VERSION}.nupkg"
-              ;;
-          esac
+          expected_suffix=".${VERSION}.nupkg"
 
           if [[ "$file_name" != *"${expected_suffix}" ]]; then
             echo "Package version mismatch: expected filename to end with ${expected_suffix}"
@@ -270,7 +263,7 @@ jobs:
 
         - [ManagedCode.ClaudeCodeSharpSDK v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK/$VERSION)
         - [ManagedCode.ClaudeCodeSharpSDK.Extensions.AI v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK.Extensions.AI/$VERSION)
-        - [ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework v$VERSION-rc4](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework/$VERSION-rc4)
+        - [ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework v$VERSION](https://www.nuget.org/packages/ManagedCode.ClaudeCodeSharpSDK.Extensions.AgentFramework/$VERSION)
         EOF
         )
 

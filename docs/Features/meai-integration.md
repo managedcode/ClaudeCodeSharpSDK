@@ -42,6 +42,8 @@ Enable `ManagedCode.ClaudeCodeSharpSDK` to participate as a first-class provider
 - `ChatOptions.Tools` is ignored.
 - `GetService<ChatClientMetadata>()` currently returns provider name `"ClaudeCodeCLI"`.
 - Streaming events map assistant-message and usage events, not token-level deltas.
+- Once a streaming turn exposes a Claude thread ID, subsequent `ChatResponseUpdate` values keep that `ConversationId` so callers can resume the same session from streaming flows.
+- Usage mapping preserves reported zero cached-token counts as `0`, not `null`.
 - Turn failures (`TurnFailedEvent`) propagate as `InvalidOperationException`.
 - `ChatOptions.AdditionalProperties` currently supports `claude:working_directory`, `claude:permission_mode`, `claude:allowed_tools`, `claude:disallowed_tools`, `claude:system_prompt`, `claude:append_system_prompt`, and `claude:max_budget_usd`.
 
@@ -60,7 +62,7 @@ Enable `ManagedCode.ClaudeCodeSharpSDK` to participate as a first-class provider
 2. Streaming
    - Trigger: `client.GetStreamingResponseAsync(messages)`
    - Steps: map messages -> create thread -> `RunStreamedAsync` -> stream events as `ChatResponseUpdate`
-   - Result: `IAsyncEnumerable<ChatResponseUpdate>` with incremental content
+   - Result: `IAsyncEnumerable<ChatResponseUpdate>` with incremental content, usage, and resumable `ConversationId` once the thread starts
 
 3. Multi-turn resume
    - Trigger: `client.GetResponseAsync(messages, new ChatOptions { ConversationId = "thread-123" })`

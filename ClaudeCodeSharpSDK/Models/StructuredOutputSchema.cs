@@ -21,10 +21,6 @@ public sealed record StructuredOutputSchema
     private const string ArraySchemaRequiresItemsMessage = "Array schema requires Items.";
     private const string ObjectSchemaRequiresPropertiesMessage = "Object schema requires Properties.";
     private const string InvalidPropertySelectorMessage = "Property selector must point to a model property.";
-    private const string JsonEscapeBackslash = "\\";
-    private const string JsonEscapedBackslash = "\\\\";
-    private const string JsonQuote = "\"";
-    private const string JsonEscapedQuote = "\\\"";
     private const string JsonNodeCreationFailedMessage = "Failed to create JSON node for required property.";
     private const string Space = " ";
     private const string MessageQuote = "'";
@@ -233,11 +229,7 @@ public sealed record StructuredOutputSchema
 
     private static JsonNode CreateStringJsonNode(string value)
     {
-        var escapedValue = value
-            .Replace(JsonEscapeBackslash, JsonEscapedBackslash, StringComparison.Ordinal)
-            .Replace(JsonQuote, JsonEscapedQuote, StringComparison.Ordinal);
-
-        return JsonNode.Parse(string.Concat(JsonQuote, escapedValue, JsonQuote))
+        return JsonValue.Create(value)
                ?? throw new InvalidOperationException(JsonNodeCreationFailedMessage);
     }
 

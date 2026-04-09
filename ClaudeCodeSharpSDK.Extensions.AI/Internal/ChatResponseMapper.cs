@@ -22,7 +22,7 @@ internal static class ChatResponseMapper
                 InputTokenCount = usage.InputTokens,
                 OutputTokenCount = usage.OutputTokens,
                 TotalTokenCount = usage.InputTokens + usage.OutputTokens,
-                CachedInputTokenCount = usage.CachedInputTokens > 0 ? usage.CachedInputTokens : null,
+                CachedInputTokenCount = usage.CachedInputTokens,
             };
         }
 

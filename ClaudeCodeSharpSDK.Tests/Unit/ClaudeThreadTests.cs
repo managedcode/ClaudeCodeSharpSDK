@@ -23,7 +23,10 @@ public partial class ClaudeThreadTests
     private const string FileChangeItemId = "change-1";
     private const string FileChangeItemType = "file_change";
     private const string FinalAnswerText = "Final answer";
+    private const string FirstConcurrentInput = "first input";
+    private const string FirstConcurrentResultText = "first result";
     private const string FirstEventId = "evt-1";
+    private const string FourthEventId = "evt-4";
     private const string HelloClaudeInput = "Hello";
     private const string ImagePath = "/tmp/image.png";
     private const string InitSubtype = "init";
@@ -40,6 +43,8 @@ public partial class ClaudeThreadTests
     private const string ReturnJsonPrompt = "Return JSON";
     private const string ResumeFlag = "--resume";
     private const string SandboxApplePath = "C:/git/CodexSandbox/apple.txt";
+    private const string SecondConcurrentInput = "second input";
+    private const string SecondConcurrentResultText = "second result";
     private const string SecondEventId = "evt-2";
     private const string SessionId = "session-123";
     private const string SuccessSubtype = "success";
@@ -49,6 +54,8 @@ public partial class ClaudeThreadTests
     private const string TextContentType = "text";
     private const string ThirdEventId = "evt-3";
     private const string WorkspacePath = "/workspace";
+    private static readonly TimeSpan ConcurrentRunTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan TurnGateObservationDelay = TimeSpan.FromMilliseconds(100);
 
     [Test]
     public async Task RunAsync_CollectsItemsUsageAndThreadId()
@@ -169,7 +176,34 @@ public partial class ClaudeThreadTests
         await Assert.That(result.Usage).IsNotNull();
     }
 
-    private static ClaudeThread CreateThread(FakeClaudeProcessRunner runner, ThreadOptions? threadOptions = null)
+    [Test]
+    public async Task RunAsync_OnSameThread_SerializesConcurrentTurns()
+    {
+        var runner = new SerializedClaudeProcessRunner();
+        using var thread = CreateThread(runner);
+
+        var firstRunTask = thread.RunAsync(FirstConcurrentInput);
+        await runner.WaitForFirstInvocationStartedAsync().WaitAsync(ConcurrentRunTimeout);
+
+        var secondRunTask = thread.RunAsync(SecondConcurrentInput);
+        await Task.Delay(TurnGateObservationDelay);
+
+        await Assert.That(runner.InvocationCount).IsEqualTo(1);
+
+        runner.CompleteFirstInvocation();
+
+        var firstResult = await firstRunTask.WaitAsync(ConcurrentRunTimeout);
+        var secondResult = await secondRunTask.WaitAsync(ConcurrentRunTimeout);
+        var invocations = runner.GetInvocations();
+
+        await Assert.That(runner.InvocationCount).IsEqualTo(2);
+        await Assert.That(invocations[0].Input).IsEqualTo(FirstConcurrentInput);
+        await Assert.That(invocations[1].Input).IsEqualTo(SecondConcurrentInput);
+        await Assert.That(firstResult.FinalResponse).IsEqualTo(FirstConcurrentResultText);
+        await Assert.That(secondResult.FinalResponse).IsEqualTo(SecondConcurrentResultText);
+    }
+
+    private static ClaudeThread CreateThread(IClaudeProcessRunner runner, ThreadOptions? threadOptions = null)
     {
         var exec = new ClaudeExec(TestConstants.ClaudeExecutablePath, null, null, runner);
         return new ClaudeThread(exec, new ClaudeOptions(), threadOptions ?? new ThreadOptions());
@@ -257,6 +291,12 @@ public partial class ClaudeThreadTests
             ClaudeThreadJsonContext.Default.FileChangeStartedEventPayload);
     }
 
+    private static IEnumerable<string> CreateSerializedTurnLines(string resultText, string initEventId, string resultEventId)
+    {
+        yield return CreateSystemInitLine(SessionId, [], initEventId);
+        yield return CreateResultLine(SessionId, resultText, resultEventId, durationMs: 8, durationApiMs: 7, totalCostUsd: 0m, inputTokens: 3, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, outputTokens: 2);
+    }
+
     private sealed class FakeClaudeProcessRunner(params string[] lines) : IClaudeProcessRunner
     {
         private readonly IReadOnlyList<string> _lines = lines;
@@ -272,6 +312,75 @@ public partial class ClaudeThreadTests
             Invocations.Add(invocation);
 
             foreach (var line in _lines)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return line;
+                await Task.Yield();
+            }
+        }
+    }
+
+    private sealed class SerializedClaudeProcessRunner : IClaudeProcessRunner
+    {
+        private readonly Lock _invocationGate = new();
+        private readonly List<ClaudeProcessInvocation> _invocations = [];
+        private readonly TaskCompletionSource<bool> _firstInvocationStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _allowFirstInvocationToComplete = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int InvocationCount
+        {
+            get
+            {
+                lock (_invocationGate)
+                {
+                    return _invocations.Count;
+                }
+            }
+        }
+
+        public void CompleteFirstInvocation() => _allowFirstInvocationToComplete.TrySetResult(true);
+
+        public IReadOnlyList<ClaudeProcessInvocation> GetInvocations()
+        {
+            lock (_invocationGate)
+            {
+                return _invocations.ToArray();
+            }
+        }
+
+        public Task WaitForFirstInvocationStartedAsync() => _firstInvocationStarted.Task;
+
+        public async IAsyncEnumerable<string> RunAsync(
+            ClaudeProcessInvocation invocation,
+            ILogger logger,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            _ = logger;
+
+            int invocationIndex;
+            lock (_invocationGate)
+            {
+                _invocations.Add(invocation);
+                invocationIndex = _invocations.Count;
+            }
+
+            if (invocationIndex == 1)
+            {
+                _firstInvocationStarted.TrySetResult(true);
+                await _allowFirstInvocationToComplete.Task.WaitAsync(ConcurrentRunTimeout, cancellationToken);
+            }
+
+            var resultText = invocationIndex == 1
+                ? FirstConcurrentResultText
+                : SecondConcurrentResultText;
+            var initEventId = invocationIndex == 1
+                ? FirstEventId
+                : ThirdEventId;
+            var resultEventId = invocationIndex == 1
+                ? SecondEventId
+                : FourthEventId;
+
+            foreach (var line in CreateSerializedTurnLines(resultText, initEventId, resultEventId))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return line;

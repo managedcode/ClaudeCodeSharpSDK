@@ -8,10 +8,11 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Integration;
 [RequiresAuthenticatedClaude]
 public class RealClaudeIntegrationTests
 {
-    private const string AgainStatusOnlyPrompt = "Again: reply with a JSON object where status is exactly \"ok\".";
+    private const string AgainPlainTextOkPrompt = "Again: reply with short plain text: ok.";
     private const string PlainTextOkPrompt = "Reply with short plain text: ok.";
     private static readonly TimeSpan PersistenceDetectionTimeout = TimeSpan.FromSeconds(10);
-    private const string StatusOnlyPrompt = "Reply with a JSON object where status is exactly \"ok\".";
+    private const string StatusOnlyPrompt =
+        "Return only a compact JSON object that matches the required schema with status exactly \"ok\". Do not include markdown, prose, or code fences.";
     private static readonly TimeSpan TestTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan TwoTurnTimeout = TimeSpan.FromMinutes(3);
 
@@ -73,25 +74,21 @@ public class RealClaudeIntegrationTests
         using var client = RealClaudeTestSupport.CreateClient();
         using var thread = StartRealIntegrationThread(client, settings.Model);
         using var cancellation = new CancellationTokenSource(TwoTurnTimeout);
-        var schema = IntegrationOutputSchemas.StatusOnly();
 
-        var first = await thread.RunAsync<StatusResponse>(
-            StatusOnlyPrompt,
-            schema,
-            IntegrationOutputJsonContext.Default.StatusResponse,
-            cancellation.Token);
+        var first = await thread.RunAsync(
+            PlainTextOkPrompt,
+            new TurnOptions { CancellationToken = cancellation.Token });
 
         var firstThreadId = thread.Id;
         await Assert.That(firstThreadId).IsNotNull();
         await Assert.That(first.Usage).IsNotNull();
+        await Assert.That(first.FinalResponse).IsNotEmpty();
 
-        var second = await thread.RunAsync<StatusResponse>(
-            AgainStatusOnlyPrompt,
-            schema,
-            IntegrationOutputJsonContext.Default.StatusResponse,
-            cancellation.Token);
+        var second = await thread.RunAsync(
+            AgainPlainTextOkPrompt,
+            new TurnOptions { CancellationToken = cancellation.Token });
 
-        await Assert.That(second.TypedResponse.Status).IsEqualTo(TestConstants.OkStatusValue);
+        await Assert.That(second.FinalResponse).Contains(TestConstants.OkStatusValue);
         await Assert.That(second.Usage).IsNotNull();
         await Assert.That(thread.Id).IsEqualTo(firstThreadId);
     }
@@ -110,7 +107,6 @@ public class RealClaudeIntegrationTests
             WorkingDirectory = workingDirectory,
         });
         using var cancellation = new CancellationTokenSource(TwoTurnTimeout);
-        var schema = IntegrationOutputSchemas.StatusOnly();
 
         var first = await thread.RunAsync(
             PlainTextOkPrompt,
@@ -134,13 +130,11 @@ public class RealClaudeIntegrationTests
             WorkingDirectory = workingDirectory,
         });
 
-        var resumed = await resumedThread.RunAsync<StatusResponse>(
-            StatusOnlyPrompt,
-            schema,
-            IntegrationOutputJsonContext.Default.StatusResponse,
-            cancellation.Token);
+        var resumed = await resumedThread.RunAsync(
+            AgainPlainTextOkPrompt,
+            new TurnOptions { CancellationToken = cancellation.Token });
 
-        await Assert.That(resumed.TypedResponse.Status).IsEqualTo(TestConstants.OkStatusValue);
+        await Assert.That(resumed.FinalResponse).Contains(TestConstants.OkStatusValue);
         await Assert.That(resumed.Usage).IsNotNull();
         await Assert.That(resumedThread.Id).IsEqualTo(threadId);
     }

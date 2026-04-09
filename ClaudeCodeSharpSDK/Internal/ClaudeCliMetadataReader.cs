@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using ManagedCode.ClaudeCodeSharpSDK.Models;
 
@@ -333,9 +334,7 @@ internal static class ClaudeCliMetadataReader
                                 string.Concat(StartExecutableFailedMessagePrefix, Space, MessageQuote, executablePath, MessageQuote, MessageSuffix));
 
         process.StandardInput.Close();
-        var standardOutput = process.StandardOutput.ReadToEnd();
-        var standardError = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+        var (standardOutput, standardError) = ReadStandardStreamsAndWaitForExit(process);
 
         if (process.ExitCode != 0)
         {
@@ -380,9 +379,7 @@ internal static class ClaudeCliMetadataReader
             }
 
             process.StandardInput.Close();
-            var standardOutput = process.StandardOutput.ReadToEnd();
-            var standardError = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var (standardOutput, standardError) = ReadStandardStreamsAndWaitForExit(process);
 
             if (process.ExitCode != 0)
             {
@@ -395,6 +392,54 @@ internal static class ClaudeCliMetadataReader
         {
             return (null, exception.Message);
         }
+    }
+
+    internal static (string StandardOutput, string StandardError) ReadStandardStreamsAndWaitForExit(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+
+        var standardOutput = new StringBuilder();
+        var standardError = new StringBuilder();
+        using var standardOutputCompleted = new ManualResetEventSlim(false);
+        using var standardErrorCompleted = new ManualResetEventSlim(false);
+
+        DataReceivedEventHandler outputHandler = (_, args) => AppendReceivedData(args.Data, standardOutput, standardOutputCompleted);
+        DataReceivedEventHandler errorHandler = (_, args) => AppendReceivedData(args.Data, standardError, standardErrorCompleted);
+
+        process.OutputDataReceived += outputHandler;
+        process.ErrorDataReceived += errorHandler;
+
+        try
+        {
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.WaitForExit();
+            standardOutputCompleted.Wait();
+            standardErrorCompleted.Wait();
+
+            return (standardOutput.ToString(), standardError.ToString());
+        }
+        finally
+        {
+            process.OutputDataReceived -= outputHandler;
+            process.ErrorDataReceived -= errorHandler;
+        }
+    }
+
+    private static void AppendReceivedData(string? data, StringBuilder builder, ManualResetEventSlim completedSignal)
+    {
+        if (data is null)
+        {
+            completedSignal.Set();
+            return;
+        }
+
+        if (builder.Length > 0)
+        {
+            builder.AppendLine();
+        }
+
+        builder.Append(data);
     }
 
     private static string ReadDefaultModel()

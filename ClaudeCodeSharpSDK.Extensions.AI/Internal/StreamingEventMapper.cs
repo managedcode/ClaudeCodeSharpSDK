@@ -10,17 +10,21 @@ internal static class StreamingEventMapper
         IAsyncEnumerable<ThreadEvent> events,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        string? conversationId = null;
+
         await foreach (var evt in events.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             switch (evt)
             {
                 case ThreadStartedEvent started:
-                    yield return new ChatResponseUpdate { ConversationId = started.ThreadId };
+                    conversationId = started.ThreadId;
+                    yield return new ChatResponseUpdate { ConversationId = conversationId };
                     break;
 
                 case ItemCompletedEvent { Item: AssistantMessageItem assistant }:
                     yield return new ChatResponseUpdate
                     {
+                        ConversationId = conversationId,
                         Role = ChatRole.Assistant,
                         Contents = [new TextContent(assistant.Text)],
                     };
@@ -29,6 +33,7 @@ internal static class StreamingEventMapper
                 case TurnCompletedEvent completed:
                     yield return new ChatResponseUpdate
                     {
+                        ConversationId = conversationId,
                         FinishReason = ChatFinishReason.Stop,
                         Contents =
                         [
@@ -37,9 +42,7 @@ internal static class StreamingEventMapper
                                 InputTokenCount = completed.Usage.InputTokens,
                                 OutputTokenCount = completed.Usage.OutputTokens,
                                 TotalTokenCount = completed.Usage.InputTokens + completed.Usage.OutputTokens,
-                                CachedInputTokenCount = completed.Usage.CachedInputTokens > 0
-                                    ? completed.Usage.CachedInputTokens
-                                    : null,
+                                CachedInputTokenCount = completed.Usage.CachedInputTokens,
                             }),
                         ],
                     };
