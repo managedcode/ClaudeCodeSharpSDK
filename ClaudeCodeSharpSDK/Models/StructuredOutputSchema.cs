@@ -227,7 +227,7 @@ public sealed record StructuredOutputSchema
         throw new ArgumentException(InvalidPropertySelectorMessage);
     }
 
-    private static JsonNode CreateStringJsonNode(string value)
+    private static JsonValue CreateStringJsonNode(string value)
     {
         return JsonValue.Create(value)
                ?? throw new InvalidOperationException(JsonNodeCreationFailedMessage);

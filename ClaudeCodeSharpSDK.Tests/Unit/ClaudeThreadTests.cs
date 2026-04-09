@@ -340,7 +340,7 @@ public partial class ClaudeThreadTests
 
         public void CompleteFirstInvocation() => _allowFirstInvocationToComplete.TrySetResult(true);
 
-        public IReadOnlyList<ClaudeProcessInvocation> GetInvocations()
+        public ClaudeProcessInvocation[] GetInvocations()
         {
             lock (_invocationGate)
             {
@@ -348,7 +348,7 @@ public partial class ClaudeThreadTests
             }
         }
 
-        public Task WaitForFirstInvocationStartedAsync() => _firstInvocationStarted.Task;
+        public Task<bool> WaitForFirstInvocationStartedAsync() => _firstInvocationStarted.Task;
 
         public async IAsyncEnumerable<string> RunAsync(
             ClaudeProcessInvocation invocation,
