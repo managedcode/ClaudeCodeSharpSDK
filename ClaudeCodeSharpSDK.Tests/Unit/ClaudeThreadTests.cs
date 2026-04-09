@@ -18,11 +18,16 @@ public partial class ClaudeThreadTests
     private const string ClaudeCodeVersion = "2.0.75";
     private const string DefaultPermissionMode = "default";
     private const string DraftAnswerText = "Draft answer";
+    private const string FileChangeAddKind = "add";
+    private const string FileChangeInProgressStatus = "in_progress";
+    private const string FileChangeItemId = "change-1";
+    private const string FileChangeItemType = "file_change";
     private const string FinalAnswerText = "Final answer";
     private const string FirstEventId = "evt-1";
     private const string HelloClaudeInput = "Hello";
     private const string ImagePath = "/tmp/image.png";
     private const string InitSubtype = "init";
+    private const string ItemStartedEventType = "item.started";
     private const string JsonSchemaFlag = "--json-schema";
     private const string MessageRoleAssistant = "assistant";
     private const string MessageType = "message";
@@ -34,6 +39,7 @@ public partial class ClaudeThreadTests
     private const string ResultEventType = "result";
     private const string ReturnJsonPrompt = "Return JSON";
     private const string ResumeFlag = "--resume";
+    private const string SandboxApplePath = "C:/git/CodexSandbox/apple.txt";
     private const string SecondEventId = "evt-2";
     private const string SessionId = "session-123";
     private const string SuccessSubtype = "success";
@@ -146,6 +152,23 @@ public partial class ClaudeThreadTests
         await Assert.That(runner.Invocations[0].Arguments.Contains(NoSessionPersistenceFlag)).IsTrue();
     }
 
+    [Test]
+    public async Task RunAsync_WithUnknownIntermediateItemStartedEvent_IgnoresItAndCompletesTurn()
+    {
+        var runner = new FakeClaudeProcessRunner(
+            CreateSystemInitLine(SessionId, [], FirstEventId),
+            CreateUnknownItemStartedLine(),
+            CreateResultLine(SessionId, FinalAnswerText, SecondEventId, durationMs: 8, durationApiMs: 7, totalCostUsd: 0m, inputTokens: 3, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, outputTokens: 2));
+        using var thread = CreateThread(runner);
+
+        var result = await thread.RunAsync(HelloClaudeInput);
+
+        await Assert.That(thread.Id).IsEqualTo(SessionId);
+        await Assert.That(result.FinalResponse).IsEqualTo(FinalAnswerText);
+        await Assert.That(result.Items.Count).IsEqualTo(0);
+        await Assert.That(result.Usage).IsNotNull();
+    }
+
     private static ClaudeThread CreateThread(FakeClaudeProcessRunner runner, ThreadOptions? threadOptions = null)
     {
         var exec = new ClaudeExec(TestConstants.ClaudeExecutablePath, null, null, runner);
@@ -221,6 +244,19 @@ public partial class ClaudeThreadTests
             ClaudeThreadJsonContext.Default.SystemInitEventPayload);
     }
 
+    private static string CreateUnknownItemStartedLine()
+    {
+        return JsonSerializer.Serialize(
+            new FileChangeStartedEventPayload(
+                ItemStartedEventType,
+                new FileChangePayload(
+                    FileChangeItemId,
+                    FileChangeItemType,
+                    [new FileChangeEntryPayload(SandboxApplePath, FileChangeAddKind)],
+                    FileChangeInProgressStatus)),
+            ClaudeThreadJsonContext.Default.FileChangeStartedEventPayload);
+    }
+
     private sealed class FakeClaudeProcessRunner(params string[] lines) : IClaudeProcessRunner
     {
         private readonly IReadOnlyList<string> _lines = lines;
@@ -260,6 +296,16 @@ public partial class ClaudeThreadTests
         string type,
         UsagePayload usage,
         TextContentPayload[] content);
+
+    internal sealed record FileChangeEntryPayload(string path, string kind);
+
+    internal sealed record FileChangePayload(
+        string id,
+        string type,
+        FileChangeEntryPayload[] changes,
+        string status);
+
+    internal sealed record FileChangeStartedEventPayload(string type, FileChangePayload item);
 
     internal sealed record ResultEventPayload(
         string type,
@@ -302,6 +348,7 @@ public partial class ClaudeThreadTests
 
     [JsonSerializable(typeof(AnswerPayload))]
     [JsonSerializable(typeof(AssistantEventPayload))]
+    [JsonSerializable(typeof(FileChangeStartedEventPayload))]
     [JsonSerializable(typeof(ResultEventPayload))]
     [JsonSerializable(typeof(SystemInitEventPayload))]
     internal sealed partial class ClaudeThreadJsonContext : JsonSerializerContext;

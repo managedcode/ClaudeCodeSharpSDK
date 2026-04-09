@@ -51,7 +51,7 @@ Keep package quality and upstream Claude Code CLI parity automatically verified 
 - Claude Code CLI watch runs daily and opens an issue when upstream `anthropics/claude-code` changed since the pinned submodule SHA.
 - Sync automation treats `claude -p --output-format json|stream-json` as the runtime source of truth for protocol validation after upstream changes.
 - Sync issue body must include detected candidate changes for CLI flags/models/features and an actionable checklist.
-- Sync issue must assign Copilot by default.
+- Sync issue must not auto-assign Copilot by default.
 - Duplicate sync issue for the same upstream SHA is not allowed.
 
 ---

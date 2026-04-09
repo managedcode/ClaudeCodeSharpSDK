@@ -19,9 +19,15 @@ public partial class ThreadEventParserTests
     private const string ErrorEventText = "fatal";
     private const string ErrorSubtype = "status";
     private const string FilePath = "README.md";
+    private const string FileChangeAddKind = "add";
+    private const string FileChangeItemId = "change-1";
+    private const string FileChangeInProgressStatus = "in_progress";
+    private const string FileChangeItemType = "file_change";
     private const string FirstEventId = "evt-1";
     private const string HelpSlashCommand = "/help";
     private const string InitSubtype = "init";
+    private const string ItemStartedEventType = "item.started";
+    private const string ItemPropertyName = "item";
     private const string MessageRoleAssistant = "assistant";
     private const string MessageRoleUser = "user";
     private const string MessageStopReason = "stop_sequence";
@@ -33,6 +39,8 @@ public partial class ThreadEventParserTests
     private const string ReviewerAgentName = "reviewer";
     private const string SecondEventId = "evt-2";
     private const string SessionId = "session-123";
+    private const string SandboxApplePath = "C:/git/CodexSandbox/apple.txt";
+    private const string StatusPropertyName = "status";
     private const string StatusSubtype = "status";
     private const string SuccessSubtype = "success";
     private const string SuccessText = "ok";
@@ -193,6 +201,25 @@ public partial class ThreadEventParserTests
 
         await Assert.That(parsed).IsTypeOf<UnknownEvent>();
         await Assert.That(((UnknownEvent)parsed).RawType).IsEqualTo(UnknownEventType);
+    }
+
+    [Test]
+    public async Task Parse_ItemStartedFileChangeInProgress_ReturnsUnknownEvent()
+    {
+        var parsed = ThreadEventParser.Parse(CreateFileChangeStartedPayload());
+
+        await Assert.That(parsed).IsTypeOf<UnknownEvent>();
+
+        var unknown = (UnknownEvent)parsed;
+        await Assert.That(unknown.RawType).IsEqualTo(ItemStartedEventType);
+        await Assert.That(unknown.Payload[ItemPropertyName]?[ClaudeProtocolConstants.Properties.Type]?.GetValue<string>())
+            .IsEqualTo(FileChangeItemType);
+        await Assert.That(unknown.Payload[ItemPropertyName]?[ClaudeProtocolConstants.Properties.Id]?.GetValue<string>())
+            .IsEqualTo(FileChangeItemId);
+        await Assert.That(unknown.Payload[ItemPropertyName]?[StatusPropertyName]?.GetValue<string>())
+            .IsEqualTo(FileChangeInProgressStatus);
+        await Assert.That(unknown.Payload[ItemPropertyName]?["changes"]?[0]?["path"]?.GetValue<string>())
+            .IsEqualTo(SandboxApplePath);
     }
 
     private static string CreateAssistantPayload()
@@ -357,6 +384,19 @@ public partial class ThreadEventParserTests
             ThreadEventParserJsonContext.Default.UnknownEventPayload);
     }
 
+    private static string CreateFileChangeStartedPayload()
+    {
+        return JsonSerializer.Serialize(
+            new FileChangeStartedEventPayload(
+                ItemStartedEventType,
+                new FileChangePayload(
+                    FileChangeItemId,
+                    FileChangeItemType,
+                    [new FileChangeEntryPayload(SandboxApplePath, FileChangeAddKind)],
+                    FileChangeInProgressStatus)),
+            ThreadEventParserJsonContext.Default.FileChangeStartedEventPayload);
+    }
+
     private static string CreateUserPayload()
     {
         return JsonSerializer.Serialize(
@@ -401,6 +441,16 @@ public partial class ThreadEventParserTests
         ToolInputPayload? input = null);
 
     internal sealed record ErrorEventPayload(string type, string? error, string? result);
+
+    internal sealed record FileChangeEntryPayload(string path, string kind);
+
+    internal sealed record FileChangePayload(
+        string id,
+        string type,
+        FileChangeEntryPayload[] changes,
+        string status);
+
+    internal sealed record FileChangeStartedEventPayload(string type, FileChangePayload item);
 
     internal sealed record ResultEventPayload(
         string type,
@@ -473,6 +523,7 @@ public partial class ThreadEventParserTests
 
     [JsonSerializable(typeof(AssistantEventPayload))]
     [JsonSerializable(typeof(ErrorEventPayload))]
+    [JsonSerializable(typeof(FileChangeStartedEventPayload))]
     [JsonSerializable(typeof(ResultEventPayload))]
     [JsonSerializable(typeof(StructuredOutputResultEventPayload))]
     [JsonSerializable(typeof(SystemInitEventPayload))]
