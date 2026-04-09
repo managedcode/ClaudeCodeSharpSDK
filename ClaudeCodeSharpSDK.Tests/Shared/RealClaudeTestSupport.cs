@@ -9,27 +9,18 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 internal static class RealClaudeTestSupport
 {
+    private const string AuthCommandName = "auth";
+    private const string StatusCommandName = "status";
     private const string ClaudeDirectoryName = ".claude";
-    private const string DangerouslySkipPermissionsFlag = "--dangerously-skip-permissions";
-    private const string LoginGuidanceFragment = "Please run /login";
-    private const string MaxBudgetFlag = "--max-budget-usd";
-    private const string MaxBudgetValue = "0.05";
-    private const string UnauthorizedStatusCodeFragment = "401";
     private const string AuthenticationRequiredMessage =
         "Authenticated Claude Code session is required for this test. Start Claude Code and complete '/login' first.";
     private const string ClaudeExecutableNotFoundMessage =
         "Claude Code executable could not be resolved for authenticated integration tests.";
     private const string CouldNotLocateRepositoryRootMessage = "Could not locate repository root from test execution directory.";
     private const string JsonLinesFileExtension = ".jsonl";
+    private const string LoggedInPropertyName = "loggedIn";
     private const string ModelEnvironmentVariable = "CLAUDE_TEST_MODEL";
-    private const string NoSessionPersistenceFlag = "--no-session-persistence";
-    private const string OutputFormatFlag = "--output-format";
     private const string ProjectsDirectoryName = "projects";
-    private const string JsonOutputFormat = "json";
-    private const string PrintFlag = "-p";
-    private const string ProbePrompt = "Reply with ok only.";
-    private const string ResultPropertyName = "result";
-    private const string IsErrorPropertyName = "is_error";
     private const int AuthenticationProbeTimeoutMilliseconds = 60000;
     private const string TerminateFailureMessagePrefix = "Failed to terminate timed-out Claude auth probe process: ";
     private static readonly Lazy<AuthenticationProbeResult> CachedAuthenticationProbe = new(ProbeAuthentication);
@@ -163,20 +154,13 @@ internal static class RealClaudeTestSupport
 
         var startInfo = new ProcessStartInfo(executablePath)
         {
-            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        startInfo.ArgumentList.Add(PrintFlag);
-        startInfo.ArgumentList.Add(OutputFormatFlag);
-        startInfo.ArgumentList.Add(JsonOutputFormat);
-        startInfo.ArgumentList.Add(DangerouslySkipPermissionsFlag);
-        startInfo.ArgumentList.Add(NoSessionPersistenceFlag);
-        startInfo.ArgumentList.Add(MaxBudgetFlag);
-        startInfo.ArgumentList.Add(MaxBudgetValue);
-        startInfo.ArgumentList.Add(ProbePrompt);
+        startInfo.ArgumentList.Add(AuthCommandName);
+        startInfo.ArgumentList.Add(StatusCommandName);
 
         using var process = Process.Start(startInfo);
         if (process is null)
@@ -184,7 +168,6 @@ internal static class RealClaudeTestSupport
             return new AuthenticationProbeResult(executablePath, false);
         }
 
-        process.StandardInput.Close();
         var standardOutputTask = process.StandardOutput.ReadToEndAsync();
         var standardErrorTask = process.StandardError.ReadToEndAsync();
 
@@ -205,23 +188,13 @@ internal static class RealClaudeTestSupport
             return new AuthenticationProbeResult(executablePath, false);
         }
 
-        if (combinedOutput.Contains(LoginGuidanceFragment, StringComparison.OrdinalIgnoreCase)
-            || combinedOutput.Contains(UnauthorizedStatusCodeFragment, StringComparison.OrdinalIgnoreCase))
-        {
-            return new AuthenticationProbeResult(executablePath, false);
-        }
-
         try
         {
-            using var document = JsonDocument.Parse(standardOutput);
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(standardOutput) ? combinedOutput : standardOutput);
             var root = document.RootElement;
-            var isError = root.TryGetProperty(IsErrorPropertyName, out var isErrorElement)
-                          && isErrorElement.ValueKind is JsonValueKind.True or JsonValueKind.False
-                          && isErrorElement.GetBoolean();
-            var result = root.TryGetProperty(ResultPropertyName, out var resultElement)
-                ? resultElement.GetString()
-                : null;
-            var isAuthenticated = !isError && !string.IsNullOrWhiteSpace(result);
+            var isAuthenticated = root.TryGetProperty(LoggedInPropertyName, out var loggedInElement)
+                                  && loggedInElement.ValueKind is JsonValueKind.True or JsonValueKind.False
+                                  && loggedInElement.GetBoolean();
             return new AuthenticationProbeResult(executablePath, isAuthenticated);
         }
         catch (JsonException)
