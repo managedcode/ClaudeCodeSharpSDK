@@ -75,6 +75,8 @@ public sealed record ClaudeExecArgs
 
     public bool ReplayUserMessages { get; init; }
 
+    public string? SessionName { get; init; }
+
     public IReadOnlyList<string>? AdditionalCliArguments { get; init; }
 
     public CancellationToken CancellationToken { get; init; } = CancellationToken.None;
