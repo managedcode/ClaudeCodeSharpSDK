@@ -22,6 +22,7 @@ public sealed class ClaudeExec
     private const string IncludePartialMessagesFlag = "--include-partial-messages";
     private const string ReplayUserMessagesFlag = "--replay-user-messages";
     private const string ModelFlag = "--model";
+    private const string EffortFlag = "--effort";
     private const string AgentFlag = "--agent";
     private const string FallbackModelFlag = "--fallback-model";
     private const string PermissionModeFlag = "--permission-mode";
@@ -156,6 +157,12 @@ public sealed class ClaudeExec
         {
             commandArgs.Add(ModelFlag);
             commandArgs.Add(args.Model);
+        }
+
+        if (args.Effort.HasValue)
+        {
+            commandArgs.Add(EffortFlag);
+            commandArgs.Add(args.Effort.Value.ToCliValue());
         }
 
         if (!string.IsNullOrWhiteSpace(args.Agent))

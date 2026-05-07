@@ -273,6 +273,7 @@ public sealed class ClaudeThread : IDisposable
             BaseUrl = _options.BaseUrl,
             ApiKey = _options.ApiKey,
             Model = _threadOptions.Model,
+            Effort = _threadOptions.Effort,
             Agent = _threadOptions.Agent,
             FallbackModel = _threadOptions.FallbackModel,
             WorkingDirectory = _threadOptions.WorkingDirectory,

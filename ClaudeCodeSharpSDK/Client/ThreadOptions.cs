@@ -2,6 +2,14 @@ using System.Text.Json.Nodes;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Client;
 
+public enum EffortLevel
+{
+    Auto,
+    Low,
+    Medium,
+    High,
+}
+
 public enum PermissionMode
 {
     AcceptEdits,
@@ -24,6 +32,8 @@ public sealed record InlineAgentDefinition(string Description, string Prompt);
 public sealed record ThreadOptions
 {
     public string? Model { get; init; }
+
+    public EffortLevel? Effort { get; init; }
 
     public string? Agent { get; init; }
 
