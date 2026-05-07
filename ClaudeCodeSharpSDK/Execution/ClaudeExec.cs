@@ -38,6 +38,7 @@ public sealed class ClaudeExec
     private const string ContinueFlag = "--continue";
     private const string ResumeFlag = "--resume";
     private const string SessionIdFlag = "--session-id";
+    private const string NameFlag = "--name";
     private const string ForkSessionFlag = "--fork-session";
     private const string NoSessionPersistenceFlag = "--no-session-persistence";
     private const string MaxBudgetUsdFlag = "--max-budget-usd";
@@ -225,6 +226,12 @@ public sealed class ClaudeExec
         {
             commandArgs.Add(SessionIdFlag);
             commandArgs.Add(args.SessionId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(args.SessionName))
+        {
+            commandArgs.Add(NameFlag);
+            commandArgs.Add(args.SessionName);
         }
 
         if (args.ForkSession)
