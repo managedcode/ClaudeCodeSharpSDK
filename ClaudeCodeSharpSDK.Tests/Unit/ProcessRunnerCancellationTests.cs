@@ -13,18 +13,37 @@ public class ProcessRunnerCancellationTests
     private const string LinuxFixtureSkipReason = "The detached stderr-retention fixture requires Linux setsid.";
     private const string StderrClosureFailure = "stderr stream closed";
     private const string WindowsLongRunningCommand = "Write-Output $PID; Start-Sleep -Seconds 30";
+    private const string SystemRootVariableName = "SystemRoot";
+    private const string WindowsDirectoryVariableName = "WINDIR";
+    private const string PathVariableName = "PATH";
+    private const string PathExtensionsVariableName = "PATHEXT";
+    private const string TestInput = "test";
+    private const string MissingExecutableNamePrefix = "missing-claude-cli-";
+    private const string ScriptFileNamePrefix = "claude-cli-";
+    private const string ShellScriptExtension = ".sh";
+    private const string PosixShellPath = "/bin/sh";
+    private const string PosixShellCommandFlag = "-c";
+    private const string PosixLongRunningCommand = "echo $$; exec /bin/sleep 30";
+    private const string WindowsPowerShellPath = "powershell.exe";
+    private const string PowerShellNoProfileFlag = "-NoProfile";
+    private const string PowerShellNonInteractiveFlag = "-NonInteractive";
+    private const string PowerShellCommandFlag = "-Command";
+    private const string EmptyStandardInput = "";
+    private const string TestsDirectoryName = "tests";
+    private const string SandboxDirectoryName = ".sandbox";
+    private const string FixtureDirectoryName = "ProcessRunnerCancellationTests";
 
     [Test]
     public async Task PublicExec_PreCanceledTokenDoesNotStartCliProcess()
     {
-        var executablePath = Path.Combine(GetTestSandboxDirectory(), $"missing-claude-cli-{Guid.NewGuid():N}");
+        var executablePath = Path.Combine(GetTestSandboxDirectory(), $"{MissingExecutableNamePrefix}{Guid.NewGuid():N}");
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         var exec = new ClaudeExec(false, TimeSpan.FromSeconds(5), executablePath, CreateEnvironment());
 
         await using var enumerator = exec.RunAsync(new ClaudeExecArgs
         {
-            Input = "test",
+            Input = TestInput,
             CancellationToken = cancellation.Token,
         }).GetAsyncEnumerator(cancellation.Token);
 
@@ -45,9 +64,9 @@ public class ProcessRunnerCancellationTests
 
         const int terminationTimeoutMilliseconds = 250;
         var invocation = new ClaudeProcessInvocation(
-            "/bin/sh",
+            PosixShellPath,
             Environment.CurrentDirectory,
-            ["-c", DescendantHoldingStderrScript],
+            [PosixShellCommandFlag, DescendantHoldingStderrScript],
             CreateEnvironment(),
             string.Empty,
             TimeSpan.FromMilliseconds(terminationTimeoutMilliseconds));
@@ -105,7 +124,7 @@ public class ProcessRunnerCancellationTests
         {
             await using var enumerator = exec.RunAsync(new ClaudeExecArgs
             {
-                Input = "test",
+                Input = TestInput,
                 CancellationToken = cancellation.Token,
             }).GetAsyncEnumerator(cancellation.Token);
 
@@ -131,8 +150,8 @@ public class ProcessRunnerCancellationTests
     {
         using var cancellation = new CancellationTokenSource();
         var invocation = OperatingSystem.IsWindows()
-            ? new ClaudeProcessInvocation("powershell.exe", Environment.CurrentDirectory, ["-NoProfile", "-NonInteractive", "-Command", WindowsLongRunningCommand], CreateWindowsProcessEnvironment(), string.Empty, TimeSpan.FromSeconds(5))
-            : new ClaudeProcessInvocation("/bin/sh", Environment.CurrentDirectory, ["-c", "echo $$; exec /bin/sleep 30"], CreateEnvironment(), string.Empty, TimeSpan.FromSeconds(5));
+            ? new ClaudeProcessInvocation(WindowsPowerShellPath, Environment.CurrentDirectory, [PowerShellNoProfileFlag, PowerShellNonInteractiveFlag, PowerShellCommandFlag, WindowsLongRunningCommand], CreateWindowsProcessEnvironment(), EmptyStandardInput, TimeSpan.FromSeconds(5))
+            : new ClaudeProcessInvocation(PosixShellPath, Environment.CurrentDirectory, [PosixShellCommandFlag, PosixLongRunningCommand], CreateEnvironment(), EmptyStandardInput, TimeSpan.FromSeconds(5));
         var runner = new DefaultClaudeProcessRunner();
 
         await using var enumerator = runner.RunAsync(invocation, NullLogger.Instance, cancellation.Token)
@@ -159,7 +178,13 @@ public class ProcessRunnerCancellationTests
     private static Dictionary<string, string> CreateWindowsProcessEnvironment()
     {
         var environment = CreateEnvironment();
-        foreach (var variableName in new[] { "SystemRoot", "WINDIR", "PATH", "PATHEXT" })
+        foreach (var variableName in new[]
+        {
+            SystemRootVariableName,
+            WindowsDirectoryVariableName,
+            PathVariableName,
+            PathExtensionsVariableName,
+        })
         {
             var value = Environment.GetEnvironmentVariable(variableName);
             if (!string.IsNullOrEmpty(value))
@@ -173,7 +198,7 @@ public class ProcessRunnerCancellationTests
 
     private static string CreateLongRunningCliScript()
     {
-        var scriptPath = Path.Combine(GetTestSandboxDirectory(), $"claude-cli-{Guid.NewGuid():N}.sh");
+        var scriptPath = Path.Combine(GetTestSandboxDirectory(), $"{ScriptFileNamePrefix}{Guid.NewGuid():N}{ShellScriptExtension}");
         File.WriteAllText(scriptPath, LongRunningScript);
         if (!OperatingSystem.IsWindows())
         {
@@ -184,7 +209,7 @@ public class ProcessRunnerCancellationTests
 
     private static string GetTestSandboxDirectory()
     {
-        var path = Path.Combine(Environment.CurrentDirectory, "tests", ".sandbox", "ProcessRunnerCancellationTests");
+        var path = Path.Combine(Environment.CurrentDirectory, TestsDirectoryName, SandboxDirectoryName, FixtureDirectoryName);
         Directory.CreateDirectory(path);
         return path;
     }

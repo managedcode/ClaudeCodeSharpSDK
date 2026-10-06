@@ -68,6 +68,7 @@ public sealed class ClaudeExec
     private const string Space = " ";
     private const string MessageQuote = "'";
     private const string MessageSuffix = ".";
+    private const string ProcessTerminationTimeoutMustBePositiveMessage = "Process termination timeout must be positive.";
 
     private static readonly HashSet<string> ReservedAdditionalCliFlags = new(StringComparer.Ordinal)
     {
@@ -131,7 +132,7 @@ public sealed class ClaudeExec
         var resolvedTerminationTimeout = processTerminationTimeout ?? ClaudeOptions.DefaultProcessTerminationTimeout;
         if (resolvedTerminationTimeout <= TimeSpan.Zero)
         {
-            throw new ArgumentOutOfRangeException(nameof(processTerminationTimeout), resolvedTerminationTimeout, "Process termination timeout must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(processTerminationTimeout), resolvedTerminationTimeout, ProcessTerminationTimeoutMustBePositiveMessage);
         }
 
         _executablePath = ClaudeCliLocator.FindClaudePath(executablePath);
