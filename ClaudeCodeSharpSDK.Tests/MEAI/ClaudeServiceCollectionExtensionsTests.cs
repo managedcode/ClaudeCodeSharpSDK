@@ -1,4 +1,5 @@
 using ManagedCode.ClaudeCodeSharpSDK.Client;
+using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Extensions.AI.Extensions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,25 @@ public class ClaudeServiceCollectionExtensionsTests
     private const string ClaudeServiceKey = "claude";
     private const string ServiceKeyParameterName = "serviceKey";
     private const string ServicesParameterName = "services";
+
+    [Test]
+    public async Task CreateCoreClientOptions_PropagatesClaudeEnvironmentPolicy()
+    {
+        var claudeOptions = new ClaudeOptions
+        {
+            InheritEnvironmentVariables = false,
+            EnvironmentVariables = new Dictionary<string, string> { ["MEAI_TEST_ENV"] = "explicit" },
+        };
+
+        var coreOptions = ClaudeChatClient.CreateCoreClientOptions(new ClaudeChatClientOptions
+        {
+            ClaudeOptions = claudeOptions,
+        });
+
+        await Assert.That(coreOptions.ClaudeOptions).IsSameReferenceAs(claudeOptions);
+        await Assert.That(coreOptions.ClaudeOptions!.InheritEnvironmentVariables).IsFalse();
+        await Assert.That(coreOptions.ClaudeOptions.EnvironmentVariables!["MEAI_TEST_ENV"]).IsEqualTo("explicit");
+    }
 
     [Test]
     public async Task AddClaudeChatClient_ThrowsForNullServices()

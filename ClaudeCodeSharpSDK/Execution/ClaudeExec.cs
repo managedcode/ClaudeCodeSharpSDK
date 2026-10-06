@@ -82,6 +82,7 @@ public sealed class ClaudeExec
 
     private readonly string _executablePath;
     private readonly IReadOnlyDictionary<string, string>? _environmentOverride;
+    private readonly bool _inheritEnvironmentVariables;
     private readonly JsonObject? _baseSettings;
     private readonly IClaudeProcessRunner _processRunner;
     private readonly ILogger _logger;
@@ -91,7 +92,17 @@ public sealed class ClaudeExec
         IReadOnlyDictionary<string, string>? environmentOverride = null,
         JsonObject? baseSettings = null,
         ILogger? logger = null)
-        : this(executablePath, environmentOverride, baseSettings, null, logger)
+        : this(executablePath, environmentOverride, baseSettings, null, logger, true)
+    {
+    }
+
+    public ClaudeExec(
+        bool inheritEnvironmentVariables,
+        string? executablePath = null,
+        IReadOnlyDictionary<string, string>? environmentOverride = null,
+        JsonObject? baseSettings = null,
+        ILogger? logger = null)
+        : this(executablePath, environmentOverride, baseSettings, null, logger, inheritEnvironmentVariables)
     {
     }
 
@@ -100,10 +111,12 @@ public sealed class ClaudeExec
         IReadOnlyDictionary<string, string>? environmentOverride,
         JsonObject? baseSettings,
         IClaudeProcessRunner? processRunner,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        bool inheritEnvironmentVariables = true)
     {
         _executablePath = ClaudeCliLocator.FindClaudePath(executablePath);
         _environmentOverride = environmentOverride;
+        _inheritEnvironmentVariables = inheritEnvironmentVariables;
         _baseSettings = baseSettings;
         _processRunner = processRunner ?? new DefaultClaudeProcessRunner();
         _logger = logger ?? NullLogger.Instance;
@@ -302,13 +315,16 @@ public sealed class ClaudeExec
     {
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (DictionaryEntry variable in Environment.GetEnvironmentVariables())
+        if (_inheritEnvironmentVariables)
         {
-            if (variable.Key is string key
-                && variable.Value is string value
-                && !string.Equals(key, ClaudeCodeNestingEnv, StringComparison.OrdinalIgnoreCase))
+            foreach (DictionaryEntry variable in Environment.GetEnvironmentVariables())
             {
-                environment[key] = value;
+                if (variable.Key is string key
+                    && variable.Value is string value
+                    && !string.Equals(key, ClaudeCodeNestingEnv, StringComparison.OrdinalIgnoreCase))
+                {
+                    environment[key] = value;
+                }
             }
         }
 

@@ -198,7 +198,7 @@ public sealed record StructuredOutputSchema
             var required = new JsonArray();
             foreach (var requiredProperty in Required)
             {
-                required.Add(CreateStringJsonNode(requiredProperty));
+                required.Add((JsonNode)CreateStringJsonNode(requiredProperty));
             }
 
             result[JsonTypeTokens.Required] = required;

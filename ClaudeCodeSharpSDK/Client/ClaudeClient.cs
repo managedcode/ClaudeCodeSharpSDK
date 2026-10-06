@@ -81,10 +81,11 @@ public sealed class ClaudeClient : IDisposable
     private ClaudeExec CreateExec()
     {
         return new ClaudeExec(
-            _options.ClaudeExecutablePath,
-            _options.EnvironmentVariables,
-            _options.Settings,
-            _options.Logger);
+            inheritEnvironmentVariables: _options.InheritEnvironmentVariables,
+            executablePath: _options.ClaudeExecutablePath,
+            environmentOverride: _options.EnvironmentVariables,
+            baseSettings: _options.Settings,
+            logger: _options.Logger);
     }
 
     private static ClaudeClientOptions CreateClientOptions(ClaudeOptions options)

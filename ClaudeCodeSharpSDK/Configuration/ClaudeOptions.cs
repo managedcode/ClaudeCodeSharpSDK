@@ -15,5 +15,7 @@ public sealed record ClaudeOptions
 
     public IReadOnlyDictionary<string, string>? EnvironmentVariables { get; init; }
 
+    public bool InheritEnvironmentVariables { get; init; } = true;
+
     public ILogger? Logger { get; init; }
 }

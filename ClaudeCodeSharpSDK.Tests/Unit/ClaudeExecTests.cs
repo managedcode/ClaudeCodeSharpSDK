@@ -178,6 +178,23 @@ public class ClaudeExecTests
     }
 
     [Test]
+    public async Task BuildEnvironment_WhenParentEnvironmentInheritanceIsDisabled_UsesOnlyExplicitValues()
+    {
+        var exec = new ClaudeExec(
+            executablePath: TestConstants.ClaudeExecutablePath,
+            environmentOverride: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [ClaudeTestEnvironmentVariable] = PresentValue,
+            },
+            inheritEnvironmentVariables: false);
+
+        var environment = exec.BuildEnvironment(baseUrl: null, apiKey: null);
+
+        await Assert.That(environment.ContainsKey("PATH")).IsFalse();
+        await Assert.That(environment[ClaudeTestEnvironmentVariable]).IsEqualTo(PresentValue);
+    }
+
+    [Test]
     public async Task BuildCommandArgs_WithNoSessionPersistence_EmitsFlag()
     {
         var exec = new ClaudeExec(executablePath: TestConstants.ClaudeExecutablePath);

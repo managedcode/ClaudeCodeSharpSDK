@@ -15,11 +15,7 @@ public sealed class ClaudeChatClient : IChatClient
     public ClaudeChatClient(ClaudeChatClientOptions? options = null)
     {
         _options = options ?? new ClaudeChatClientOptions();
-        _client = new ClaudeClient(new ClaudeClientOptions
-        {
-            ClaudeOptions = _options.ClaudeOptions,
-            AutoStart = true,
-        });
+        _client = new ClaudeClient(CreateCoreClientOptions(_options));
     }
 
     public async Task<ChatResponse> GetResponseAsync(
@@ -92,6 +88,16 @@ public sealed class ClaudeChatClient : IChatClient
         }
 
         return null;
+    }
+
+    internal static ClaudeClientOptions CreateCoreClientOptions(ClaudeChatClientOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return new ClaudeClientOptions
+        {
+            ClaudeOptions = options.ClaudeOptions,
+            AutoStart = true,
+        };
     }
 
     public void Dispose() => _client.Dispose();
