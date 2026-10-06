@@ -12,6 +12,7 @@ public class ProcessRunnerCancellationTests
     private const string PosixFixtureSkipReason = "The public CLI yield-boundary fixture currently uses a POSIX executable script.";
     private const string LinuxFixtureSkipReason = "The detached stderr-retention fixture requires Linux setsid.";
     private const string StderrClosureFailure = "stderr stream closed";
+    private const string WindowsLongRunningCommand = "Write-Output $PID; Start-Sleep -Seconds 30";
 
     [Test]
     public async Task PublicExec_PreCanceledTokenDoesNotStartCliProcess()
@@ -130,7 +131,7 @@ public class ProcessRunnerCancellationTests
     {
         using var cancellation = new CancellationTokenSource();
         var invocation = OperatingSystem.IsWindows()
-            ? new ClaudeProcessInvocation("powershell.exe", Environment.CurrentDirectory, ["-NoProfile", "-NonInteractive", "-Command", "Write-Output $PID; Start-Sleep -Seconds 30"], CreateEnvironment(), string.Empty, TimeSpan.FromSeconds(5))
+            ? new ClaudeProcessInvocation("powershell.exe", Environment.CurrentDirectory, ["-NoProfile", "-NonInteractive", "-Command", WindowsLongRunningCommand], CreateWindowsProcessEnvironment(), string.Empty, TimeSpan.FromSeconds(5))
             : new ClaudeProcessInvocation("/bin/sh", Environment.CurrentDirectory, ["-c", "echo $$; exec /bin/sleep 30"], CreateEnvironment(), string.Empty, TimeSpan.FromSeconds(5));
         var runner = new DefaultClaudeProcessRunner();
 
@@ -153,6 +154,21 @@ public class ProcessRunnerCancellationTests
     private static Dictionary<string, string> CreateEnvironment()
     {
         return new Dictionary<string, string>(StringComparer.Ordinal);
+    }
+
+    private static Dictionary<string, string> CreateWindowsProcessEnvironment()
+    {
+        var environment = CreateEnvironment();
+        foreach (var variableName in new[] { "SystemRoot", "WINDIR", "PATH", "PATHEXT" })
+        {
+            var value = Environment.GetEnvironmentVariable(variableName);
+            if (!string.IsNullOrEmpty(value))
+            {
+                environment[variableName] = value;
+            }
+        }
+
+        return environment;
     }
 
     private static string CreateLongRunningCliScript()
