@@ -89,6 +89,7 @@ The upstream reference repository `anthropics/claude-code` is tracked in this re
 - Malformed JSON line -> `InvalidOperationException` with raw line context
 - `result` event with `is_error: true` -> `ThreadRunException`
 - cancellation token triggered -> execution interrupted and surfaced to caller
+- Cancellation requests kill the CLI process tree and await confirmation that the root CLI process exited and stderr closed, bounded by `ClaudeOptions.ProcessTerminationTimeout` (five seconds by default). If either condition cannot be confirmed, the SDK surfaces a failure instead of returning cancellation. A detached descendant that retains stderr can therefore turn a cancellation into a bounded failure. Effects already sent to external systems remain outside this process guarantee.
 
 ---
 

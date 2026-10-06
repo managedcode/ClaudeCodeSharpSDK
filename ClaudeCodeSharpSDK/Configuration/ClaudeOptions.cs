@@ -5,6 +5,8 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Configuration;
 
 public sealed record ClaudeOptions
 {
+    public static readonly TimeSpan DefaultProcessTerminationTimeout = TimeSpan.FromSeconds(5);
+
     public string? ClaudeExecutablePath { get; init; }
 
     public string? BaseUrl { get; init; }
@@ -16,6 +18,8 @@ public sealed record ClaudeOptions
     public IReadOnlyDictionary<string, string>? EnvironmentVariables { get; init; }
 
     public bool InheritEnvironmentVariables { get; init; } = true;
+
+    public TimeSpan ProcessTerminationTimeout { get; init; } = DefaultProcessTerminationTimeout;
 
     public ILogger? Logger { get; init; }
 }

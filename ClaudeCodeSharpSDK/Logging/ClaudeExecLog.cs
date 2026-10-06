@@ -20,13 +20,13 @@ internal static partial class ClaudeExecLog
         EventId = 1001,
         Level = LogLevel.Warning,
         Message = CancelledMessage)]
-    public static partial void Cancelled(ILogger logger, Exception exception);
+    public static partial void Cancelled(ILogger logger);
 
     [LoggerMessage(
         EventId = 1002,
         Level = LogLevel.Error,
         Message = FailedMessage)]
-    public static partial void Failed(ILogger logger, Exception exception);
+    public static partial void Failed(ILogger logger);
 
     [LoggerMessage(
         EventId = 1003,
@@ -38,5 +38,5 @@ internal static partial class ClaudeExecLog
         EventId = 1004,
         Level = LogLevel.Warning,
         Message = ProcessKillFailedMessage)]
-    public static partial void ProcessKillFailed(ILogger logger, string executablePath, Exception exception);
+    public static partial void ProcessKillFailed(ILogger logger, string executablePath);
 }

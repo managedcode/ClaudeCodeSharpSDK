@@ -82,6 +82,7 @@ public sealed class ClaudeClient : IDisposable
     {
         return new ClaudeExec(
             inheritEnvironmentVariables: _options.InheritEnvironmentVariables,
+            processTerminationTimeout: _options.ProcessTerminationTimeout,
             executablePath: _options.ClaudeExecutablePath,
             environmentOverride: _options.EnvironmentVariables,
             baseSettings: _options.Settings,

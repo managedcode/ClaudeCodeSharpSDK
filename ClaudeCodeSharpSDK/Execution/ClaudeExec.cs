@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ManagedCode.ClaudeCodeSharpSDK.Client;
+using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Internal;
 using ManagedCode.ClaudeCodeSharpSDK.Logging;
 using Microsoft.Extensions.Logging;
@@ -83,6 +84,7 @@ public sealed class ClaudeExec
     private readonly string _executablePath;
     private readonly IReadOnlyDictionary<string, string>? _environmentOverride;
     private readonly bool _inheritEnvironmentVariables;
+    private readonly TimeSpan _processTerminationTimeout;
     private readonly JsonObject? _baseSettings;
     private readonly IClaudeProcessRunner _processRunner;
     private readonly ILogger _logger;
@@ -92,7 +94,7 @@ public sealed class ClaudeExec
         IReadOnlyDictionary<string, string>? environmentOverride = null,
         JsonObject? baseSettings = null,
         ILogger? logger = null)
-        : this(executablePath, environmentOverride, baseSettings, null, logger, true)
+        : this(executablePath, environmentOverride, baseSettings, null, logger, true, ClaudeOptions.DefaultProcessTerminationTimeout)
     {
     }
 
@@ -102,7 +104,18 @@ public sealed class ClaudeExec
         IReadOnlyDictionary<string, string>? environmentOverride = null,
         JsonObject? baseSettings = null,
         ILogger? logger = null)
-        : this(executablePath, environmentOverride, baseSettings, null, logger, inheritEnvironmentVariables)
+        : this(executablePath, environmentOverride, baseSettings, null, logger, inheritEnvironmentVariables, ClaudeOptions.DefaultProcessTerminationTimeout)
+    {
+    }
+
+    public ClaudeExec(
+        bool inheritEnvironmentVariables,
+        TimeSpan processTerminationTimeout,
+        string? executablePath = null,
+        IReadOnlyDictionary<string, string>? environmentOverride = null,
+        JsonObject? baseSettings = null,
+        ILogger? logger = null)
+        : this(executablePath, environmentOverride, baseSettings, null, logger, inheritEnvironmentVariables, processTerminationTimeout)
     {
     }
 
@@ -112,11 +125,19 @@ public sealed class ClaudeExec
         JsonObject? baseSettings,
         IClaudeProcessRunner? processRunner,
         ILogger? logger = null,
-        bool inheritEnvironmentVariables = true)
+        bool inheritEnvironmentVariables = true,
+        TimeSpan? processTerminationTimeout = null)
     {
+        var resolvedTerminationTimeout = processTerminationTimeout ?? ClaudeOptions.DefaultProcessTerminationTimeout;
+        if (resolvedTerminationTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(processTerminationTimeout), resolvedTerminationTimeout, "Process termination timeout must be positive.");
+        }
+
         _executablePath = ClaudeCliLocator.FindClaudePath(executablePath);
         _environmentOverride = environmentOverride;
         _inheritEnvironmentVariables = inheritEnvironmentVariables;
+        _processTerminationTimeout = resolvedTerminationTimeout;
         _baseSettings = baseSettings;
         _processRunner = processRunner ?? new DefaultClaudeProcessRunner();
         _logger = logger ?? NullLogger.Instance;
@@ -131,7 +152,13 @@ public sealed class ClaudeExec
         var workingDirectory = string.IsNullOrWhiteSpace(args.WorkingDirectory)
             ? Environment.CurrentDirectory
             : args.WorkingDirectory;
-        var invocation = new ClaudeProcessInvocation(_executablePath, workingDirectory, commandArgs, environment, args.Input);
+        var invocation = new ClaudeProcessInvocation(
+            _executablePath,
+            workingDirectory,
+            commandArgs,
+            environment,
+            args.Input,
+            _processTerminationTimeout);
 
         return RunWithDiagnosticsAsync(invocation, args.CancellationToken);
     }
@@ -355,6 +382,12 @@ public sealed class ClaudeExec
     {
         ClaudeExecLog.Starting(_logger, invocation.ExecutablePath, invocation.Arguments.Count);
 
+        if (cancellationToken.IsCancellationRequested)
+        {
+            ClaudeExecLog.Cancelled(_logger);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
         var lineCount = 0;
 
         IAsyncEnumerator<string> enumerator;
@@ -364,20 +397,20 @@ public sealed class ClaudeExec
                 .RunAsync(invocation, _logger, cancellationToken)
                 .GetAsyncEnumerator(cancellationToken);
         }
-        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            ClaudeExecLog.Cancelled(_logger, exception);
+            ClaudeExecLog.Cancelled(_logger);
             throw;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            ClaudeExecLog.Failed(_logger, exception);
+            ClaudeExecLog.Failed(_logger);
             throw;
         }
 
         await using (enumerator)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (true)
             {
                 string line;
                 try
@@ -389,14 +422,14 @@ public sealed class ClaudeExec
 
                     line = enumerator.Current;
                 }
-                catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    ClaudeExecLog.Cancelled(_logger, exception);
+                    ClaudeExecLog.Cancelled(_logger);
                     throw;
                 }
-                catch (Exception exception)
+                catch (Exception)
                 {
-                    ClaudeExecLog.Failed(_logger, exception);
+                    ClaudeExecLog.Failed(_logger);
                     throw;
                 }
 
@@ -532,7 +565,8 @@ internal sealed record ClaudeProcessInvocation(
     string WorkingDirectory,
     IReadOnlyList<string> Arguments,
     IReadOnlyDictionary<string, string> Environment,
-    string Input);
+    string Input,
+    TimeSpan ProcessTerminationTimeout);
 
 internal interface IClaudeProcessRunner
 {
@@ -547,6 +581,8 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
     private const string StartExecutableFailedMessagePrefix = "Failed to start Claude Code executable";
     private const string ProcessFailedWithoutStderrMessage = "Claude Code process failed without stderr output.";
     private const string CliExitedWithCodeMessagePrefix = "Claude Code CLI exited with code";
+    private const string ProcessTerminationUnconfirmedMessage = "Could not confirm that the Claude Code process exited after termination was requested.";
+    private const string StderrTerminationUnconfirmedMessage = "Could not confirm that the Claude Code stderr stream closed within the configured process termination timeout.";
     private const string Space = " ";
     private const string MessageQuote = "'";
     private const string MessageSuffix = ".";
@@ -579,6 +615,8 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         }
 
         using var process = new Process { StartInfo = startInfo };
+        Task<string>? standardErrorTask = null;
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             if (!process.Start())
@@ -596,15 +634,29 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
 
         try
         {
+            standardErrorTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
             await process.StandardInput.WriteAsync(invocation.Input.AsMemory(), cancellationToken).ConfigureAwait(false);
             await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
             process.StandardInput.Close();
 
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
             string? line;
-            while ((line = await process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
+            while (true)
             {
+                try
+                {
+                    line = await process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    await ThrowIfExitedWithFailureAsync(process, standardErrorTask, invocation.ProcessTerminationTimeout).ConfigureAwait(false);
+                    throw;
+                }
+
+                if (line is null)
+                {
+                    break;
+                }
+
                 if (line.Length == 0)
                 {
                     continue;
@@ -613,8 +665,17 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
                 yield return line;
             }
 
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            var standardError = await stderrTask.ConfigureAwait(false);
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await ThrowIfExitedWithFailureAsync(process, standardErrorTask, invocation.ProcessTerminationTimeout).ConfigureAwait(false);
+                throw;
+            }
+
+            var standardError = await ReadStandardErrorAsync(standardErrorTask, invocation.ProcessTerminationTimeout).ConfigureAwait(false);
             if (process.ExitCode != 0)
             {
                 var details = string.IsNullOrWhiteSpace(standardError)
@@ -626,22 +687,75 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         }
         finally
         {
-            TryKillProcess(process, logger, invocation.ExecutablePath);
+            await EnsureProcessStoppedAsync(process, logger, invocation.ExecutablePath, invocation.ProcessTerminationTimeout).ConfigureAwait(false);
+            if (standardErrorTask is not null)
+            {
+                await ReadStandardErrorAsync(standardErrorTask, invocation.ProcessTerminationTimeout).ConfigureAwait(false);
+            }
         }
     }
 
-    private static void TryKillProcess(Process process, ILogger logger, string executablePath)
+    private static async Task ThrowIfExitedWithFailureAsync(
+        Process process,
+        Task<string> standardErrorTask,
+        TimeSpan processTerminationTimeout)
+    {
+        if (!process.HasExited || process.ExitCode == 0)
+        {
+            return;
+        }
+
+        var standardError = await ReadStandardErrorAsync(standardErrorTask, processTerminationTimeout).ConfigureAwait(false);
+        var details = string.IsNullOrWhiteSpace(standardError)
+            ? ProcessFailedWithoutStderrMessage
+            : standardError.Trim();
+        throw new InvalidOperationException(
+            string.Concat(CliExitedWithCodeMessagePrefix, Space, process.ExitCode.ToString(CultureInfo.InvariantCulture), PeriodSpace, details));
+    }
+
+    private static async Task<string> ReadStandardErrorAsync(Task<string> standardErrorTask, TimeSpan timeout)
     {
         try
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
+            return await standardErrorTask.WaitAsync(timeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException exception)
+        {
+            throw new InvalidOperationException(StderrTerminationUnconfirmedMessage, exception);
+        }
+    }
+
+    private static async Task EnsureProcessStoppedAsync(
+        Process process,
+        ILogger logger,
+        string executablePath,
+        TimeSpan processTerminationTimeout)
+    {
+        if (process.HasExited)
+        {
+            return;
+        }
+
+        Exception? killException = null;
+        try
+        {
+            process.Kill(entireProcessTree: true);
         }
         catch (Exception exception)
         {
-            ClaudeExecLog.ProcessKillFailed(logger, executablePath, exception);
+            ClaudeExecLog.ProcessKillFailed(logger, executablePath);
+            killException = exception;
+        }
+
+        try
+        {
+            await process.WaitForExitAsync().WaitAsync(processTerminationTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException exception)
+        {
+            Exception failure = killException is null ? exception : new AggregateException(killException, exception);
+            ClaudeExecLog.ProcessKillFailed(logger, executablePath);
+            throw new InvalidOperationException(ProcessTerminationUnconfirmedMessage, failure);
         }
     }
 }

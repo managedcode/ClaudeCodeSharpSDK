@@ -19,6 +19,7 @@ public class ClaudeServiceCollectionExtensionsTests
         var claudeOptions = new ClaudeOptions
         {
             InheritEnvironmentVariables = false,
+            ProcessTerminationTimeout = TimeSpan.FromSeconds(7),
             EnvironmentVariables = new Dictionary<string, string> { ["MEAI_TEST_ENV"] = "explicit" },
         };
 
@@ -29,6 +30,7 @@ public class ClaudeServiceCollectionExtensionsTests
 
         await Assert.That(coreOptions.ClaudeOptions).IsSameReferenceAs(claudeOptions);
         await Assert.That(coreOptions.ClaudeOptions!.InheritEnvironmentVariables).IsFalse();
+        await Assert.That(coreOptions.ClaudeOptions.ProcessTerminationTimeout).IsEqualTo(TimeSpan.FromSeconds(7));
         await Assert.That(coreOptions.ClaudeOptions.EnvironmentVariables!["MEAI_TEST_ENV"]).IsEqualTo("explicit");
     }
 
