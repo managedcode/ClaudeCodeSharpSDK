@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text;
+using System.Runtime.ExceptionServices;
 using ManagedCode.ClaudeCodeSharpSDK.Execution;
 using ManagedCode.ClaudeCodeSharpSDK.Models;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,17 +48,17 @@ public class ProcessRunnerCancellationTests
     private const string WindowsNonZeroExitCommand = "[Console]::Error.WriteLine('provider failed'); exit 23";
     private const string WindowsNonZeroExitBeforeInputCommand = "[Console]::Error.WriteLine('provider failed'); Start-Sleep -Milliseconds 100; exit 23";
     private const string WindowsZeroExitAfterClosingInputCommand = "[Console]::OpenStandardInput().Dispose(); Start-Sleep -Milliseconds 100; exit 0";
-    private const string WindowsClosingInputFixtureCommand = "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class CliTestNativeInput { [DllImport(\"kernel32.dll\")] public static extern bool CloseHandle(IntPtr handle); [DllImport(\"kernel32.dll\")] public static extern IntPtr GetStdHandle(int handle); }'; $ready=$args[0]; $release=$args[1]; $closed=$args[2]; [IO.File]::WriteAllText($ready,[string]$PID); Write-Output 'ready'; while(-not (Test-Path -LiteralPath $release)){Start-Sleep -Milliseconds 10}; [CliTestNativeInput]::CloseHandle([CliTestNativeInput]::GetStdHandle(-10)); [IO.File]::WriteAllText($closed,[string]$PID); Write-Output 'closed'; Start-Sleep -Seconds 30";
+    private const string WindowsClosingInputFixtureCommand = "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class CliTestNativeInput { [DllImport(\"kernel32.dll\")] public static extern bool CloseHandle(IntPtr handle); [DllImport(\"kernel32.dll\")] public static extern IntPtr GetStdHandle(int handle); }'; $ready=$env:PROSTIR_TEST_READY_PATH; $release=$env:PROSTIR_TEST_RELEASE_PATH; $closed=$env:PROSTIR_TEST_CLOSED_PATH; [IO.File]::WriteAllText($ready,[string]$PID); Write-Output 'ready'; while(-not (Test-Path -LiteralPath $release)){Start-Sleep -Milliseconds 10}; $closeSucceeded=[CliTestNativeInput]::CloseHandle([CliTestNativeInput]::GetStdHandle(-10)); if(-not $closeSucceeded){throw 'The Windows fixture could not close its stdin handle.'}; [IO.File]::WriteAllText($closed,[string]$PID); Write-Output 'closed'; Start-Sleep -Seconds 30";
+    private const string FixtureReadyEnvironmentVariable = "PROSTIR_TEST_READY_PATH";
+    private const string FixtureReleaseEnvironmentVariable = "PROSTIR_TEST_RELEASE_PATH";
+    private const string FixtureClosedEnvironmentVariable = "PROSTIR_TEST_CLOSED_PATH";
     private const string WindowsNodeExecutableName = "node.exe";
     private const string NodeEvaluationFlag = "-e";
     private const string NodeReadyLine = "ready";
     private const string NodeHandleClosedLine = "closed";
     private const string NodeMissingMessage = "Node.js was not found on PATH.";
     private const string UnexpectedFixtureOutputMessage = "The Node.js child fixture emitted an unexpected protocol line.";
-    private const string RootExitedBeforeStdinCloseWasObservedMessage =
-        "CLI root PID {0} exited before the stdin-close callback was observed (HasExited={1}, process-termination-timeout={2}).";
-    private static readonly CompositeFormat RootExitedBeforeStdinCloseWasObservedFormat =
-        CompositeFormat.Parse(RootExitedBeforeStdinCloseWasObservedMessage);
+    private const string FixtureCleanupFailedMessage = "The real-process fixture did not clean up successfully.";
     private const string FixtureGuidFormat = "N";
     private const string ReadyFileExtension = ".ready";
     private const string ReleaseFileExtension = ".release";
@@ -287,15 +287,26 @@ public class ProcessRunnerCancellationTests
         var releasePath = Path.Combine(sandbox, string.Concat(fixtureId, ReleaseFileExtension));
         var closedPath = Path.Combine(sandbox, string.Concat(fixtureId, ClosedFileExtension));
         var stdinFailureObserved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var environment = OperatingSystem.IsWindows() ? CreateWindowsProcessEnvironment() : CreateEnvironment();
+        string[] arguments;
+        if (OperatingSystem.IsWindows())
+        {
+            environment[FixtureReadyEnvironmentVariable] = readyPath;
+            environment[FixtureReleaseEnvironmentVariable] = releasePath;
+            environment[FixtureClosedEnvironmentVariable] = closedPath;
+            arguments = [PowerShellNoProfileFlag, PowerShellNonInteractiveFlag, PowerShellCommandFlag, WindowsClosingInputFixtureCommand];
+        }
+        else
+        {
+            arguments = [NodeEvaluationFlag, NodeClosingInputFixture, readyPath, releasePath, closedPath];
+        }
+
         var executablePath = OperatingSystem.IsWindows() ? WindowsPowerShellPath : FindNodeExecutablePath();
-        string[] arguments = OperatingSystem.IsWindows()
-            ? [PowerShellNoProfileFlag, PowerShellNonInteractiveFlag, PowerShellCommandFlag, WindowsClosingInputFixtureCommand, readyPath, releasePath, closedPath]
-            : [NodeEvaluationFlag, NodeClosingInputFixture, readyPath, releasePath, closedPath];
         var invocation = new ClaudeProcessInvocation(
             executablePath,
             sandbox,
             arguments,
-            OperatingSystem.IsWindows() ? CreateWindowsProcessEnvironment() : CreateEnvironment(),
+            environment,
             new string(PromptCharacter[0], StdinClosePressureCharacters),
             TimeSpan.FromMilliseconds(250))
         {
@@ -303,10 +314,11 @@ public class ProcessRunnerCancellationTests
             StandardInputWriteFailed = rootExited => stdinFailureObserved.TrySetResult(rootExited),
         };
         using var cancellation = new CancellationTokenSource();
-        await using var enumerator = new DefaultClaudeProcessRunner()
+        var enumerator = new DefaultClaudeProcessRunner()
             .RunAsync(invocation, NullLogger.Instance, cancellation.Token)
             .GetAsyncEnumerator(cancellation.Token);
         Task? consumeTask = null;
+        Exception? testFailure = null;
 
         try
         {
@@ -319,17 +331,6 @@ public class ProcessRunnerCancellationTests
             await WaitForFileAsync(closedPath, WindowsFixtureStartupTimeout);
             await stdinFailureObserved.Task.WaitAsync(WindowsFixtureStartupTimeout);
             await Assert.That(await stdinFailureObserved.Task).IsFalse();
-            var processId = int.Parse(File.ReadAllText(closedPath), CultureInfo.InvariantCulture);
-            using var child = Process.GetProcessById(processId);
-            if (child.HasExited)
-            {
-                throw new InvalidOperationException(string.Format(
-                    CultureInfo.InvariantCulture,
-                    RootExitedBeforeStdinCloseWasObservedFormat,
-                    processId,
-                    child.HasExited,
-                    ClosedInputProcessTerminationTimeout));
-            }
 
             var stopwatch = Stopwatch.StartNew();
             var observedTask = CaptureExceptionAsync(consumeTask);
@@ -343,27 +344,134 @@ public class ProcessRunnerCancellationTests
             await Assert.That(exception).IsNotTypeOf<CliExecutionFailureException>();
             await Assert.That(stopwatch.Elapsed < WindowsCleanupAssertionBound).IsTrue();
         }
-        finally
+        catch (Exception exception)
         {
-            cancellation.Cancel();
-            if (!File.Exists(releasePath))
+            testFailure = exception;
+        }
+
+        var cleanupFailures = new List<Exception>();
+        cancellation.Cancel();
+        try
+        {
+            File.WriteAllText(releasePath, EmptyFileContent);
+        }
+        catch (Exception exception)
+        {
+            cleanupFailures.Add(exception);
+        }
+
+        var consumeCompleted = consumeTask is null;
+        if (consumeTask is not null)
+        {
+            var cleanupTask = CaptureExceptionAsync(consumeTask);
+            var completedTask = await Task.WhenAny(cleanupTask, Task.Delay(WindowsFixtureCompletionTimeout));
+            if (!ReferenceEquals(completedTask, cleanupTask))
             {
-                File.WriteAllText(releasePath, EmptyFileContent);
+                try
+                {
+                    await StopFixtureRootAsync(readyPath, cleanupFailures);
+                }
+                catch (Exception exception)
+                {
+                    cleanupFailures.Add(exception);
+                }
+
+                completedTask = await Task.WhenAny(cleanupTask, Task.Delay(WindowsFixtureCompletionTimeout));
             }
 
-            if (consumeTask is not null)
+            consumeCompleted = ReferenceEquals(completedTask, cleanupTask);
+            if (consumeCompleted)
             {
-                var cleanupTask = CaptureExceptionAsync(consumeTask);
-                using var cleanupTimeout = new CancellationTokenSource(WindowsFixtureCompletionTimeout);
-                var completedTask = await Task.WhenAny(
-                    cleanupTask,
-                    Task.Delay(Timeout.InfiniteTimeSpan, cleanupTimeout.Token));
-                await Assert.That(ReferenceEquals(completedTask, cleanupTask)).IsTrue();
+                _ = await cleanupTask;
+            }
+            else
+            {
+                cleanupFailures.Add(new TimeoutException(FixtureCleanupFailedMessage));
+            }
+        }
+
+        if (consumeCompleted)
+        {
+            try
+            {
+                await enumerator.DisposeAsync();
+            }
+            catch (Exception exception)
+            {
+                cleanupFailures.Add(exception);
+            }
+        }
+
+        foreach (var fixturePath in new[] { readyPath, releasePath, closedPath })
+        {
+            try
+            {
+                File.Delete(fixturePath);
+            }
+            catch (Exception exception)
+            {
+                cleanupFailures.Add(exception);
+            }
+        }
+
+        if (cleanupFailures.Count > 0)
+        {
+            if (testFailure is not null)
+            {
+                cleanupFailures.Insert(0, testFailure);
             }
 
-            File.Delete(readyPath);
-            File.Delete(releasePath);
-            File.Delete(closedPath);
+            throw new AggregateException(FixtureCleanupFailedMessage, cleanupFailures);
+        }
+
+        if (testFailure is not null)
+        {
+            ExceptionDispatchInfo.Capture(testFailure).Throw();
+        }
+    }
+
+    private static async Task StopFixtureRootAsync(string readyPath, List<Exception> cleanupFailures)
+    {
+        if (!File.Exists(readyPath))
+        {
+            return;
+        }
+
+        var processId = int.Parse(File.ReadAllText(readyPath), CultureInfo.InvariantCulture);
+        Process process;
+        try
+        {
+            process = Process.GetProcessById(processId);
+        }
+        catch (ArgumentException)
+        {
+            return;
+        }
+
+        using (process)
+        {
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException) when (process.HasExited)
+                {
+                }
+            }
+
+            if (!process.HasExited)
+            {
+                try
+                {
+                    await process.WaitForExitAsync().WaitAsync(WindowsFixtureCompletionTimeout);
+                }
+                catch (Exception exception)
+                {
+                    cleanupFailures.Add(exception);
+                }
+            }
         }
     }
 
