@@ -21,7 +21,7 @@ public class ClaudeCliMetadataReaderTests
     private const string ConcurrentOutputCommandUnix =
         "i=0; while [ $i -lt 5000 ]; do printf 'stdout-line-%s\\n' \"$i\"; printf 'stderr-line-%s\\n' \"$i\" >&2; i=$((i+1)); done";
     private const string ConcurrentOutputCommandWindows =
-        "for /L %i in (0,1,4999) do @echo stdout-line-%i & @echo stderr-line-%i 1>&2";
+        "for /L %i in (0,1,4999) do @(echo stdout-line-%i & echo stderr-line-%i 1>&2)";
     private const string DefaultModelJsonTemplate = "{\"model\":\"__MODEL__\",\"statusLine\":{\"enabled\":true}}";
     private const string FirstStandardErrorLine = "stderr-line-0";
     private const string FirstStandardOutputLine = "stdout-line-0";

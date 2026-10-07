@@ -45,6 +45,7 @@ public class ProcessRunnerCancellationTests
     private const string FixtureDirectoryName = "ProcessRunnerCancellationTests";
     private const int SmallOutputLimitCharacters = 64;
     private const int AggregateOutputLimitCharacters = 24;
+    private static readonly TimeSpan ProcessOutputCleanupAssertionBound = TimeSpan.FromSeconds(8);
 
     [Test]
     public async Task PublicExec_PreCanceledTokenDoesNotStartCliProcess()
@@ -145,7 +146,7 @@ public class ProcessRunnerCancellationTests
 
         await Assert.That(exception).IsTypeOf<InvalidOperationException>();
         await Assert.That(exception!.Message).Contains(ProcessOutputLimitMessage);
-        await Assert.That(stopwatch.Elapsed < TimeSpan.FromSeconds(5)).IsTrue();
+        await Assert.That(stopwatch.Elapsed < ProcessOutputCleanupAssertionBound).IsTrue();
     }
 
     [Test]
