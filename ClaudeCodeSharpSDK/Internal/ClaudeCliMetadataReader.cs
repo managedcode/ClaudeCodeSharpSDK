@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Models;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Internal;
@@ -53,14 +54,16 @@ internal static class ClaudeCliMetadataReader
     private const string FallbackDefaultModel = ClaudeModels.Sonnet;
 
     public static ClaudeCliMetadata Read(string executablePath) =>
-        Read(executablePath, EmptyEnvironment, true, DefaultProbeTimeout, DefaultMaximumOutputCharacters);
+        Read(executablePath, EmptyEnvironment, true, DefaultProbeTimeout, DefaultMaximumOutputCharacters,
+            ClaudeOptions.DefaultCliMetadataMaximumFileCharacters);
 
     public static ClaudeCliMetadata Read(
         string executablePath,
         IReadOnlyDictionary<string, string> environment,
         bool inheritEnvironmentVariables,
         TimeSpan probeTimeout,
-        int maximumOutputCharacters)
+        int maximumOutputCharacters,
+        int maximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ArgumentNullException.ThrowIfNull(environment);
@@ -68,7 +71,7 @@ internal static class ClaudeCliMetadataReader
         var installedVersion = ReadInstalledVersion(executablePath, environment, inheritEnvironmentVariables,
             probeTimeout, maximumOutputCharacters);
         return new ClaudeCliMetadata(installedVersion,
-            ReadDefaultModel(environment, inheritEnvironmentVariables), ClaudeModels.Known);
+            ReadDefaultModel(environment, inheritEnvironmentVariables, maximumFileCharacters), ClaudeModels.Known);
     }
 
     public static ClaudeCliUpdateStatus ReadUpdateStatus(string executablePath) =>
@@ -442,7 +445,8 @@ internal static class ClaudeCliMetadataReader
 
     private static string ReadDefaultModel(
         IReadOnlyDictionary<string, string> environment,
-        bool inheritEnvironmentVariables)
+        bool inheritEnvironmentVariables,
+        int maximumOutputCharacters)
     {
         foreach (var settingsPath in EnumerateSettingsFiles(environment, inheritEnvironmentVariables))
         {
@@ -453,7 +457,8 @@ internal static class ClaudeCliMetadataReader
 
             try
             {
-                var parsed = ParseDefaultModelFromJson(File.ReadAllText(settingsPath));
+                var settings = BoundedMetadataFileReader.ReadAllText(settingsPath, maximumOutputCharacters);
+                var parsed = ParseDefaultModelFromJson(settings);
                 if (!string.IsNullOrWhiteSpace(parsed))
                 {
                     return parsed!;

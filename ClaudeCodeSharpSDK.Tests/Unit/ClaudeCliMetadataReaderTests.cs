@@ -10,8 +10,11 @@ public class ClaudeCliMetadataReaderTests
 {
     private const string MetadataSandboxPrefix = "ClaudeCliMetadataReaderTests-";
     private const string PathEnvironmentVariable = "PATH";
+    private const string SystemRootEnvironmentVariable = "SystemRoot";
     private const string ClaudeConfigDirectoryEnvironmentVariable = "CLAUDE_CONFIG_DIR";
     private const string SettingsFileName = "settings.json";
+    private const int SmallMetadataFileLimit = 256;
+    private const string MetadataFileLimitMessage = "CLI metadata file exceeded the configured character limit.";
     private const string ClaudeSettingsFixture = "{ \"model\": \"" + ClaudeModels.Sonnet + "\" }";
     private const string CommandFlagUnix = "-c";
     private const string CommandFlagWindows = "/c";
@@ -135,6 +138,7 @@ public class ClaudeCliMetadataReaderTests
                 EnvironmentVariables = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [PathEnvironmentVariable] = Environment.GetEnvironmentVariable(PathEnvironmentVariable) ?? string.Empty,
+                    [SystemRootEnvironmentVariable] = Environment.GetEnvironmentVariable(SystemRootEnvironmentVariable) ?? string.Empty,
                     [ClaudeConfigDirectoryEnvironmentVariable] = configDirectory,
                 },
                 InheritEnvironmentVariables = false,
@@ -144,6 +148,41 @@ public class ClaudeCliMetadataReaderTests
 
             await Assert.That(metadata.DefaultModel).IsEqualTo(ClaudeModels.Sonnet);
             await Assert.That(string.IsNullOrWhiteSpace(metadata.InstalledVersion)).IsFalse();
+        }
+        finally
+        {
+            Directory.Delete(configDirectory, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ClaudeClient_GetCliMetadata_RejectsOversizedSettingsFile()
+    {
+        var configDirectory = Path.Combine(Environment.CurrentDirectory, "tests", ".sandbox",
+            $"{MetadataSandboxPrefix}{Guid.NewGuid():N}");
+        Directory.CreateDirectory(configDirectory);
+        try
+        {
+            File.WriteAllText(Path.Combine(configDirectory, SettingsFileName),
+                string.Concat(ClaudeSettingsFixture, new string('x', SmallMetadataFileLimit + 1)));
+            using var client = new ClaudeClient(new ClaudeOptions
+            {
+                ClaudeExecutablePath = ClaudeCliLocator.FindClaudePath(null),
+                EnvironmentVariables = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [PathEnvironmentVariable] = Environment.GetEnvironmentVariable(PathEnvironmentVariable) ?? string.Empty,
+                    [SystemRootEnvironmentVariable] = Environment.GetEnvironmentVariable(SystemRootEnvironmentVariable) ?? string.Empty,
+                    [ClaudeConfigDirectoryEnvironmentVariable] = configDirectory,
+                },
+                InheritEnvironmentVariables = false,
+                CliMetadataMaximumFileCharacters = SmallMetadataFileLimit,
+            });
+
+            var action = () => client.GetCliMetadata();
+            var exception = await Assert.That(action).ThrowsException();
+
+            await Assert.That(exception).IsTypeOf<InvalidOperationException>();
+            await Assert.That(exception!.Message).Contains(MetadataFileLimitMessage);
         }
         finally
         {

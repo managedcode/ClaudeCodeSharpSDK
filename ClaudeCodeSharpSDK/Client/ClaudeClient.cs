@@ -64,11 +64,12 @@ public sealed class ClaudeClient : IDisposable
 
     public ClaudeCliMetadata GetCliMetadata()
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(_options.CliMetadataMaximumFileCharacters);
         var executablePath = ClaudeCliLocator.FindClaudePath(_options.ClaudeExecutablePath);
         var exec = CreateExec();
         return ClaudeCliMetadataReader.Read(executablePath, exec.BuildEnvironment(_options.BaseUrl, _options.ApiKey),
             _options.InheritEnvironmentVariables, _options.CliMetadataProbeTimeout,
-            _options.CliMetadataMaximumOutputCharacters);
+            _options.CliMetadataMaximumOutputCharacters, _options.CliMetadataMaximumFileCharacters);
     }
 
     public ClaudeCliUpdateStatus GetCliUpdateStatus()
@@ -87,8 +88,10 @@ public sealed class ClaudeClient : IDisposable
     private ClaudeExec CreateExec()
     {
         return new ClaudeExec(
+            processRunner: null,
             inheritEnvironmentVariables: _options.InheritEnvironmentVariables,
             processTerminationTimeout: _options.ProcessTerminationTimeout,
+            maximumProcessOutputCharacters: _options.MaximumProcessOutputCharacters,
             executablePath: _options.ClaudeExecutablePath,
             environmentOverride: _options.EnvironmentVariables,
             baseSettings: _options.Settings,

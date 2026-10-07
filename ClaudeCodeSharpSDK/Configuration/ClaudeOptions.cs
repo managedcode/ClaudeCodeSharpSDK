@@ -11,6 +11,10 @@ public sealed record ClaudeOptions
 
     public const int DefaultCliMetadataMaximumOutputCharacters = 65536;
 
+    public const int DefaultCliMetadataMaximumFileCharacters = 1048576;
+
+    public const int DefaultMaximumProcessOutputCharacters = 1048576;
+
     public string? ClaudeExecutablePath { get; init; }
 
     public string? BaseUrl { get; init; }
@@ -28,6 +32,10 @@ public sealed record ClaudeOptions
     public TimeSpan CliMetadataProbeTimeout { get; init; } = DefaultCliMetadataProbeTimeout;
 
     public int CliMetadataMaximumOutputCharacters { get; init; } = DefaultCliMetadataMaximumOutputCharacters;
+
+    public int CliMetadataMaximumFileCharacters { get; init; } = DefaultCliMetadataMaximumFileCharacters;
+
+    public int MaximumProcessOutputCharacters { get; init; } = DefaultMaximumProcessOutputCharacters;
 
     public ILogger? Logger { get; init; }
 }
