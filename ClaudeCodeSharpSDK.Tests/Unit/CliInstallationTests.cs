@@ -39,6 +39,7 @@ public sealed class CliInstallationTests
     private const string PipeHolderMarkerName = "pipe-holder";
     private const string PipeHolderPidFileName = "pipe-holder.pid";
     private const string SetsidCommandName = "setsid";
+    private const string SetsidPathEnvironmentVariableName = "SDK_TEST_SETSID_PATH";
     private const string CleanupMessage = "CLI installation process or output cleanup could not be confirmed within its configured timeout.";
     private const string TimeoutMessage = "CLI installation exceeded its configured process timeout.";
     private const string SetsidRequiredMessage = "The detached pipe-holder cleanup fixture requires Linux setsid.";
@@ -87,7 +88,7 @@ public sealed class CliInstallationTests
         if (fs.existsSync(path.join(__dirname, 'pipe-holder'))) {
             const { spawn } = require('node:child_process');
             const childScript = 'printf "%s" "$$" > "$1.tmp" && mv "$1.tmp" "$1" && exec /bin/sleep 60';
-            const holder = spawn('setsid', ['/bin/sh', '-c', childScript, 'holder',
+            const holder = spawn(process.env.SDK_TEST_SETSID_PATH, ['/bin/sh', '-c', childScript, 'holder',
                 path.join(__dirname, 'pipe-holder.pid')], { detached: true, stdio: 'inherit' });
             holder.unref();
         }
@@ -461,12 +462,17 @@ public sealed class CliInstallationTests
         var npmScript = Path.Combine(npmBin, NpmCliFileName);
         await File.WriteAllTextAsync(npmManifest,
             NpmPackageManifest.Replace(ScriptPlaceholderNpm, NpmPackageName, StringComparison.Ordinal));
-        await File.WriteAllTextAsync(npmScript, NpmScript.Replace(ScriptPlaceholderPackage, PackageName, StringComparison.Ordinal)
+        await File.WriteAllTextAsync(npmScript, NpmScript
+            .Replace(ScriptPlaceholderPackage, PackageName, StringComparison.Ordinal)
             .Replace(ScriptPlaceholderCli, CliName, StringComparison.Ordinal)
             .Replace(ScriptPlaceholderNpm, NpmPackageName, StringComparison.Ordinal));
         var node = FindNode();
         var path = Path.GetDirectoryName(node)!;
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [PathName] = path };
+        if (OperatingSystem.IsLinux())
+        {
+            environment[SetsidPathEnvironmentVariableName] = FindExecutablePath(SetsidCommandName);
+        }
         var systemRoot = Environment.GetEnvironmentVariable(SystemRootName);
         if (OperatingSystem.IsWindows() && !string.IsNullOrWhiteSpace(systemRoot))
         {
