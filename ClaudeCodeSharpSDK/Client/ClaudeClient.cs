@@ -69,7 +69,8 @@ public sealed class ClaudeClient : IDisposable
         var exec = CreateExec();
         return ClaudeCliMetadataReader.Read(executablePath, exec.BuildEnvironment(_options.BaseUrl, _options.ApiKey),
             _options.InheritEnvironmentVariables, _options.CliMetadataProbeTimeout,
-            _options.CliMetadataMaximumOutputCharacters, _options.CliMetadataMaximumFileCharacters);
+            _options.CliMetadataMaximumOutputCharacters, _options.CliMetadataMaximumFileCharacters,
+            _options.CliMetadataProbeLeaseTimeout);
     }
 
     public ClaudeCliUpdateStatus GetCliUpdateStatus()
@@ -78,7 +79,8 @@ public sealed class ClaudeClient : IDisposable
         var exec = CreateExec();
         return ClaudeCliMetadataReader.ReadUpdateStatus(executablePath,
             exec.BuildEnvironment(_options.BaseUrl, _options.ApiKey), _options.InheritEnvironmentVariables,
-            _options.CliMetadataProbeTimeout, _options.CliMetadataMaximumOutputCharacters);
+            _options.CliMetadataProbeTimeout, _options.CliMetadataMaximumOutputCharacters,
+            _options.CliMetadataProbeLeaseTimeout);
     }
 
     public void Dispose() => _connectionState.Dispose();

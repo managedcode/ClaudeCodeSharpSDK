@@ -190,6 +190,19 @@ public class ClaudeCliMetadataReaderTests
         }
     }
 
+    [Test]
+    public async Task ClaudeClient_GetCliMetadata_RejectsNonPositiveProbeLeaseTimeout()
+    {
+        foreach (var timeout in new[] { TimeSpan.Zero, TimeSpan.FromMilliseconds(-1) })
+        {
+            using var client = new ClaudeClient(new ClaudeOptions { CliMetadataProbeLeaseTimeout = timeout });
+            var action = () => client.GetCliMetadata();
+            var exception = await Assert.That(action).ThrowsException();
+
+            await Assert.That(exception).IsTypeOf<ArgumentOutOfRangeException>();
+        }
+    }
+
     private static ProcessStartInfo CreateConcurrentOutputProcessStartInfo()
     {
         var startInfo = new ProcessStartInfo(

@@ -9,6 +9,8 @@ public class ProcessRunnerCancellationTests
 {
     private const string LongRunningScript = "#!/bin/sh\necho $$\nexec /bin/sleep 30\n";
     private const string DescendantHoldingStderrScript = "/usr/bin/setsid /bin/sleep 30 >&2 & echo $!; exit 0";
+    private const string DescendantHoldingStderrWhileParentRunsScript =
+        "/usr/bin/setsid /bin/sleep 30 >&2 & echo $!; exec /bin/sleep 30";
     private const string PosixFixtureSkipReason = "The public CLI yield-boundary fixture currently uses a POSIX executable script.";
     private const string LinuxFixtureSkipReason = "The detached stderr-retention fixture requires Linux setsid.";
     private const string StderrClosureFailure = "stderr stream closed";
@@ -19,6 +21,17 @@ public class ProcessRunnerCancellationTests
     private const string PosixMultiLineOverflowCommand = "printf '1234567890\\n1234567890\\n1234567890\\n'";
     private const string PosixStandardErrorPressureCommand = "printf '%100s' x >&2; exec /bin/sleep 30";
     private const string PosixNormalMultiLineCommand = "printf 'first\\nsecond\\n'";
+    private const string PosixLargePromptPipePressureCommand =
+        "head -c 262144 /dev/zero | tr '\\0' s; printf '\\n'; head -c 262144 /dev/zero | tr '\\0' e >&2; cat";
+    private const string WindowsLargePromptPipePressureCommand =
+        "[Console]::Out.WriteLine('s' * 262144); [Console]::Error.WriteLine('e' * 262144); $inputText = [Console]::In.ReadToEnd(); [Console]::Out.Write($inputText)";
+    private const string PromptLineSeparator = "\n";
+    private const string YoloFlag = "--yolo";
+    private const string PromptCharacter = "p";
+    private const string StandardOutputPressureCharacter = "s";
+    private const int PipePressureCharacters = 262144;
+    private const int LargePromptCharacters = 262144;
+    private const int LargeProcessOutputCharacters = 1048576;
     private const string WindowsLongRunningCommand = "Write-Output $PID; Start-Sleep -Seconds 30";
     private const string WindowsSingleLineOverflowCommand = "Write-Output ('x' * 100); Start-Sleep -Seconds 30";
     private const string WindowsMultiLineOverflowCommand = "Write-Output '1234567890'; Write-Output '1234567890'; Write-Output '1234567890'";
@@ -46,6 +59,86 @@ public class ProcessRunnerCancellationTests
     private const int SmallOutputLimitCharacters = 64;
     private const int AggregateOutputLimitCharacters = 24;
     private static readonly TimeSpan ProcessOutputCleanupAssertionBound = TimeSpan.FromSeconds(8);
+
+    [Test]
+    public async Task DefaultRunner_DrainsBothOutputPipesWhileWritingLargePromptToStandardInput()
+    {
+        var prompt = string.Concat(YoloFlag, PromptLineSeparator, new string(PromptCharacter[0], LargePromptCharacters));
+        var invocation = CreateOutputInvocation(
+            OperatingSystem.IsWindows() ? WindowsLargePromptPipePressureCommand : PosixLargePromptPipePressureCommand,
+            TimeSpan.FromSeconds(10), LargeProcessOutputCharacters,
+            input: prompt);
+        var lines = new List<string>();
+
+        await foreach (var line in new DefaultClaudeProcessRunner().RunAsync(invocation, NullLogger.Instance, CancellationToken.None))
+        {
+            lines.Add(line);
+        }
+
+        await Assert.That(lines).Count().IsEqualTo(3);
+        await Assert.That(lines[0].Length).IsEqualTo(PipePressureCharacters);
+        await Assert.That(lines[0].All(character => character == StandardOutputPressureCharacter[0])).IsTrue();
+        await Assert.That(lines[1]).IsEqualTo(YoloFlag);
+        await Assert.That(lines[2].Length).IsEqualTo(LargePromptCharacters);
+        await Assert.That(lines[2].All(character => character == PromptCharacter[0])).IsTrue();
+    }
+
+    [Test]
+    public async Task CancellationWithDescendantHoldingStderrSurfacesUnconfirmedCleanup()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip.Test(LinuxFixtureSkipReason);
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        var standardErrorReaderCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var standardOutputReadCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var invocation = new ClaudeProcessInvocation(
+            PosixShellPath,
+            Environment.CurrentDirectory,
+            [PosixShellCommandFlag, DescendantHoldingStderrWhileParentRunsScript],
+            CreateEnvironment(),
+            EmptyStandardInput,
+            TimeSpan.FromMilliseconds(250))
+        {
+            StandardErrorReaderCompleted = () => standardErrorReaderCompleted.TrySetResult(),
+            StandardOutputReadCompleted = () => standardOutputReadCompleted.TrySetResult(),
+        };
+        var runner = new DefaultClaudeProcessRunner();
+        await using var enumerator = runner.RunAsync(invocation, NullLogger.Instance, cancellation.Token)
+            .GetAsyncEnumerator(cancellation.Token);
+        var childProcessId = 0;
+
+        try
+        {
+            await Assert.That(await enumerator.MoveNextAsync()).IsTrue();
+            childProcessId = int.Parse(enumerator.Current, CultureInfo.InvariantCulture);
+            cancellation.Cancel();
+
+            var action = async () => await enumerator.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3));
+            var exception = await Assert.That(action).ThrowsException();
+
+            await Assert.That(exception).IsTypeOf<InvalidOperationException>();
+            await Assert.That(exception!.Message).Contains(StderrClosureFailure);
+            await standardOutputReadCompleted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await standardErrorReaderCompleted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        }
+        finally
+        {
+            try
+            {
+                using var child = Process.GetProcessById(childProcessId);
+                child.Kill(entireProcessTree: true);
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (ArgumentException)
+            {
+                // The detached fixture child already exited.
+            }
+        }
+    }
 
     [Test]
     public async Task PublicExec_PreCanceledTokenDoesNotStartCliProcess()
@@ -129,11 +222,11 @@ public class ProcessRunnerCancellationTests
     [Test]
     public async Task DefaultRunner_StandardErrorPressureStopsQuietRootWithinBound()
     {
+        var stopwatch = new Stopwatch();
         var invocation = CreateOutputInvocation(
             OperatingSystem.IsWindows() ? WindowsStandardErrorPressureCommand : PosixStandardErrorPressureCommand,
-            TimeSpan.FromSeconds(2), SmallOutputLimitCharacters);
+            TimeSpan.FromSeconds(2), SmallOutputLimitCharacters, stopwatch.Start);
         var runner = new DefaultClaudeProcessRunner();
-        var stopwatch = Stopwatch.StartNew();
         var action = async () =>
         {
             await foreach (var _ in runner.RunAsync(invocation, NullLogger.Instance, CancellationToken.None))
@@ -282,7 +375,9 @@ public class ProcessRunnerCancellationTests
     private static ClaudeProcessInvocation CreateOutputInvocation(
         string command,
         TimeSpan processTerminationTimeout,
-        int maximumProcessOutputCharacters)
+        int maximumProcessOutputCharacters,
+        Action? standardErrorOutputLimitExceeded = null,
+        string? input = null)
     {
         return new ClaudeProcessInvocation(
             OperatingSystem.IsWindows() ? WindowsPowerShellPath : PosixShellPath,
@@ -291,10 +386,11 @@ public class ProcessRunnerCancellationTests
                 ? [PowerShellNoProfileFlag, PowerShellNonInteractiveFlag, PowerShellCommandFlag, command]
                 : [PosixShellCommandFlag, command],
             OperatingSystem.IsWindows() ? CreateWindowsProcessEnvironment() : CreateEnvironment(),
-            EmptyStandardInput,
+            input ?? EmptyStandardInput,
             processTerminationTimeout)
         {
             MaximumProcessOutputCharacters = maximumProcessOutputCharacters,
+            StandardErrorOutputLimitExceeded = standardErrorOutputLimitExceeded,
         };
     }
 

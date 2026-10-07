@@ -55,7 +55,7 @@ internal static class ClaudeCliMetadataReader
 
     public static ClaudeCliMetadata Read(string executablePath) =>
         Read(executablePath, EmptyEnvironment, true, DefaultProbeTimeout, DefaultMaximumOutputCharacters,
-            ClaudeOptions.DefaultCliMetadataMaximumFileCharacters);
+            ClaudeOptions.DefaultCliMetadataMaximumFileCharacters, ClaudeOptions.DefaultCliMetadataProbeLeaseTimeout);
 
     public static ClaudeCliMetadata Read(
         string executablePath,
@@ -63,34 +63,41 @@ internal static class ClaudeCliMetadataReader
         bool inheritEnvironmentVariables,
         TimeSpan probeTimeout,
         int maximumOutputCharacters,
-        int maximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters)
+        int maximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters,
+        TimeSpan? probeLeaseTimeout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ArgumentNullException.ThrowIfNull(environment);
+        var leaseTimeout = probeLeaseTimeout ?? ClaudeOptions.DefaultCliMetadataProbeLeaseTimeout;
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(leaseTimeout, TimeSpan.Zero);
 
         var installedVersion = ReadInstalledVersion(executablePath, environment, inheritEnvironmentVariables,
-            probeTimeout, maximumOutputCharacters);
+            probeTimeout, maximumOutputCharacters, leaseTimeout);
         return new ClaudeCliMetadata(installedVersion,
             ReadDefaultModel(environment, inheritEnvironmentVariables, maximumFileCharacters), ClaudeModels.Known);
     }
 
     public static ClaudeCliUpdateStatus ReadUpdateStatus(string executablePath) =>
-        ReadUpdateStatus(executablePath, EmptyEnvironment, true, DefaultProbeTimeout, DefaultMaximumOutputCharacters);
+        ReadUpdateStatus(executablePath, EmptyEnvironment, true, DefaultProbeTimeout, DefaultMaximumOutputCharacters,
+            ClaudeOptions.DefaultCliMetadataProbeLeaseTimeout);
 
     public static ClaudeCliUpdateStatus ReadUpdateStatus(
         string executablePath,
         IReadOnlyDictionary<string, string> environment,
         bool inheritEnvironmentVariables,
         TimeSpan probeTimeout,
-        int maximumOutputCharacters)
+        int maximumOutputCharacters,
+        TimeSpan? probeLeaseTimeout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ArgumentNullException.ThrowIfNull(environment);
+        var leaseTimeout = probeLeaseTimeout ?? ClaudeOptions.DefaultCliMetadataProbeLeaseTimeout;
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(leaseTimeout, TimeSpan.Zero);
 
         var installedVersion = ReadInstalledVersion(executablePath, environment, inheritEnvironmentVariables,
-            probeTimeout, maximumOutputCharacters);
+            probeTimeout, maximumOutputCharacters, leaseTimeout);
         var probe = ProbeLatestPublishedVersion(environment, inheritEnvironmentVariables, probeTimeout,
-            maximumOutputCharacters);
+            maximumOutputCharacters, leaseTimeout);
 
         if (!string.IsNullOrWhiteSpace(probe.ErrorMessage))
         {
@@ -350,11 +357,12 @@ internal static class ClaudeCliMetadataReader
         IReadOnlyDictionary<string, string> environment,
         bool inheritEnvironmentVariables,
         TimeSpan probeTimeout,
-        int maximumOutputCharacters)
+        int maximumOutputCharacters,
+        TimeSpan leaseTimeout)
     {
         var probe = BoundedCliProcessProbe.Run(executablePath, [VersionFlag], environment,
             inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters,
-            leaseAcquisitionTimeout: probeTimeout);
+            leaseAcquisitionTimeout: leaseTimeout);
         if (probe.ExitCode != 0)
         {
             throw new InvalidOperationException(ProbeFailureMessage);
@@ -374,7 +382,8 @@ internal static class ClaudeCliMetadataReader
         IReadOnlyDictionary<string, string> environment,
         bool inheritEnvironmentVariables,
         TimeSpan probeTimeout,
-        int maximumOutputCharacters)
+        int maximumOutputCharacters,
+        TimeSpan leaseTimeout)
     {
         try
         {
@@ -384,7 +393,7 @@ internal static class ClaudeCliMetadataReader
             var probe = BoundedCliProcessProbe.Run(gitExecutable,
                 [GitLsRemoteCommand, GitTagsArgument, GitRefsArgument, RepositoryUrl], environment,
                 inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters,
-                leaseAcquisitionTimeout: probeTimeout);
+                leaseAcquisitionTimeout: leaseTimeout);
             return probe.ExitCode == 0
                 ? (ParseLatestPublishedVersion(probe.StandardOutput), null)
                 : (null, ProbeFailureMessage);
