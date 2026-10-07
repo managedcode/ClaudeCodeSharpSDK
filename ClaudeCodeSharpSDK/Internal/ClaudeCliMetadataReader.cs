@@ -350,7 +350,8 @@ internal static class ClaudeCliMetadataReader
         int maximumOutputCharacters)
     {
         var probe = BoundedCliProcessProbe.Run(executablePath, [VersionFlag], environment,
-            inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters);
+            inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters,
+            leaseAcquisitionTimeout: probeTimeout);
         if (probe.ExitCode != 0)
         {
             throw new InvalidOperationException(ProbeFailureMessage);
@@ -379,7 +380,8 @@ internal static class ClaudeCliMetadataReader
                 : GitExecutableName;
             var probe = BoundedCliProcessProbe.Run(gitExecutable,
                 [GitLsRemoteCommand, GitTagsArgument, GitRefsArgument, RepositoryUrl], environment,
-                inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters);
+                inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters,
+                leaseAcquisitionTimeout: probeTimeout);
             return probe.ExitCode == 0
                 ? (ParseLatestPublishedVersion(probe.StandardOutput), null)
                 : (null, ProbeFailureMessage);
