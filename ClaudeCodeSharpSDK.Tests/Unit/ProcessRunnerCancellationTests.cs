@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using ManagedCode.ClaudeCodeSharpSDK.Execution;
+using ManagedCode.ClaudeCodeSharpSDK.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Unit;
@@ -10,7 +11,7 @@ public class ProcessRunnerCancellationTests
     private const string LongRunningScript = "#!/bin/sh\necho $$\nexec /bin/sleep 30\n";
     private const string DescendantHoldingStderrScript = "/usr/bin/setsid /bin/sleep 30 >&2 & echo $!; exit 0";
     private const string DescendantHoldingStderrWhileParentRunsScript =
-        "/usr/bin/setsid /bin/sleep 30 >&2 & echo $!; exec /bin/sleep 30";
+        "/usr/bin/setsid /bin/sh -c '/usr/bin/setsid /bin/sleep 30 >&2 & echo $!; exit 0' & exec /bin/sleep 30";
     private const string PosixFixtureSkipReason = "The public CLI yield-boundary fixture currently uses a POSIX executable script.";
     private const string LinuxFixtureSkipReason = "The detached stderr-retention fixture requires Linux setsid.";
     private const string StderrClosureFailure = "stderr stream closed";
@@ -21,6 +22,8 @@ public class ProcessRunnerCancellationTests
     private const string PosixMultiLineOverflowCommand = "printf '1234567890\\n1234567890\\n1234567890\\n'";
     private const string PosixStandardErrorPressureCommand = "printf '%100s' x >&2; exec /bin/sleep 30";
     private const string PosixNormalMultiLineCommand = "printf 'first\\nsecond\\n'";
+    private const string PosixNonZeroExitCommand = "printf 'provider failed\\n' >&2; exit 23";
+    private const string PosixNonZeroExitBeforeInputCommand = "printf 'provider failed\\n' >&2; /bin/sleep 0.1; exit 23";
     private const string PosixLargePromptPipePressureCommand =
         "head -c 262144 /dev/zero | tr '\\0' s; printf '\\n'; head -c 262144 /dev/zero | tr '\\0' e >&2; cat";
     private const string WindowsLargePromptPipePressureCommand =
@@ -37,6 +40,8 @@ public class ProcessRunnerCancellationTests
     private const string WindowsMultiLineOverflowCommand = "Write-Output '1234567890'; Write-Output '1234567890'; Write-Output '1234567890'";
     private const string WindowsStandardErrorPressureCommand = "[Console]::Error.Write('x' * 100); Start-Sleep -Seconds 30";
     private const string WindowsNormalMultiLineCommand = "Write-Output 'first'; Write-Output 'second'";
+    private const string WindowsNonZeroExitCommand = "[Console]::Error.WriteLine('provider failed'); exit 23";
+    private const string WindowsNonZeroExitBeforeInputCommand = "[Console]::Error.WriteLine('provider failed'); Start-Sleep -Milliseconds 100; exit 23";
     private const string SystemRootVariableName = "SystemRoot";
     private const string WindowsDirectoryVariableName = "WINDIR";
     private const string PathVariableName = "PATH";
@@ -177,6 +182,47 @@ public class ProcessRunnerCancellationTests
         await Assert.That(lines).Count().IsEqualTo(2);
         await Assert.That(lines[0]).IsEqualTo(ExpectedFirstLine);
         await Assert.That(lines[1]).IsEqualTo(ExpectedSecondLine);
+    }
+
+    [Test]
+    public async Task DefaultRunner_NonZeroExitConfirmsRootAndNaturalOutputCompletion()
+    {
+        var invocation = CreateOutputInvocation(
+            OperatingSystem.IsWindows() ? WindowsNonZeroExitCommand : PosixNonZeroExitCommand,
+            TimeSpan.FromSeconds(5), SmallOutputLimitCharacters);
+        var action = async () =>
+        {
+            await foreach (var _ in new DefaultClaudeProcessRunner().RunAsync(invocation, NullLogger.Instance, CancellationToken.None))
+            {
+            }
+        };
+
+        var exception = await Assert.That(action).ThrowsException();
+
+        await Assert.That(exception).IsTypeOf<CliExecutionFailureException>();
+        await Assert.That(((CliExecutionFailureException)exception!).ExitCode).IsEqualTo(23);
+        await Assert.That(((CliExecutionFailureException)exception).RootProcessExitConfirmed).IsTrue();
+    }
+
+    [Test]
+    public async Task DefaultRunner_NonZeroExitWithCompletedBrokenPipeKeepsConfirmedFailure()
+    {
+        var prompt = new string(PromptCharacter[0], LargePromptCharacters);
+        var invocation = CreateOutputInvocation(
+            OperatingSystem.IsWindows() ? WindowsNonZeroExitBeforeInputCommand : PosixNonZeroExitBeforeInputCommand,
+            TimeSpan.FromSeconds(5), LargeProcessOutputCharacters, input: prompt);
+        var action = async () =>
+        {
+            await foreach (var _ in new DefaultClaudeProcessRunner().RunAsync(invocation, NullLogger.Instance, CancellationToken.None))
+            {
+            }
+        };
+
+        var exception = await Assert.That(action).ThrowsException();
+
+        await Assert.That(exception).IsTypeOf<CliExecutionFailureException>();
+        await Assert.That(((CliExecutionFailureException)exception!).ExitCode).IsEqualTo(23);
+        await Assert.That(((CliExecutionFailureException)exception).RootProcessExitConfirmed).IsTrue();
     }
 
     [Test]

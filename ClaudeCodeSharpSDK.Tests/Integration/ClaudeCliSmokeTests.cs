@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
-using ManagedCode.ClaudeCodeSharpSDK.Internal;
+using ManagedCode.ClaudeCodeSharpSDK.Client;
+using ManagedCode.ClaudeCodeSharpSDK.Configuration;
+using ManagedCode.ClaudeCodeSharpSDK.Models;
 using ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Integration;
@@ -33,8 +35,6 @@ public class ClaudeCliSmokeTests
     private const string ConfigDirectoryName = ".config";
     private const string NewLine = "\n";
     private const string CarriageReturn = "\r";
-    private const string PathRootedButMissingMessagePrefix = "Claude Code CLI path is rooted but missing:";
-    private const string FailedToResolveExecutablePathMessage = "Failed to resolve Claude Code CLI path.";
     private const string CouldNotLocateRepositoryRootMessage = "Could not locate repository root from test execution directory.";
     private const string StartProcessFailedMessagePrefix = "Failed to start Claude Code CLI at";
     private const string ClaudeCodeNestingEnvironmentVariable = "CLAUDECODE";
@@ -47,15 +47,15 @@ public class ClaudeCliSmokeTests
     [Test]
     public async Task ClaudeCli_Smoke_FindExecutablePath_ResolvesExistingBinary()
     {
-        var executablePath = ResolveExecutablePath();
-        await Assert.That(File.Exists(executablePath)).IsTrue();
+        var command = ResolveLaunchCommand();
+        await Assert.That(File.Exists(command.ExecutablePath)).IsTrue();
     }
 
     [Test]
     public async Task ClaudeCli_Smoke_VersionCommand_ReturnsClaudeCodeVersion()
     {
         using var timeoutCts = new CancellationTokenSource(TestTimeout);
-        var result = await RunClaudeAsync(ResolveExecutablePath(), null, timeoutCts.Token, VersionFlag);
+        var result = await RunClaudeAsync(ResolveLaunchCommand(), null, timeoutCts.Token, VersionFlag);
 
         await Assert.That(result.ExitCode).IsEqualTo(0);
         await Assert.That(string.Concat(result.StandardOutput, result.StandardError))
@@ -66,7 +66,7 @@ public class ClaudeCliSmokeTests
     public async Task ClaudeCli_Smoke_HelpCommand_DescribesStreamJsonOutput()
     {
         using var timeoutCts = new CancellationTokenSource(TestTimeout);
-        var result = await RunClaudeAsync(ResolveExecutablePath(), null, timeoutCts.Token, HelpFlag);
+        var result = await RunClaudeAsync(ResolveLaunchCommand(), null, timeoutCts.Token, HelpFlag);
 
         await Assert.That(result.ExitCode).IsEqualTo(0);
         await Assert.That(string.Concat(result.StandardOutput, result.StandardError))
@@ -82,7 +82,7 @@ public class ClaudeCliSmokeTests
         try
         {
             var result = await RunClaudeAsync(
-                ResolveExecutablePath(),
+                ResolveLaunchCommand(),
                 CreateUnauthenticatedEnvironmentOverrides(sandboxDirectory),
                 timeoutCts.Token,
                 PrintFlag,
@@ -110,35 +110,10 @@ public class ClaudeCliSmokeTests
         }
     }
 
-    private static string ResolveExecutablePath()
+    private static CliLaunchCommand ResolveLaunchCommand()
     {
-        var resolvedPath = ClaudeCliLocator.FindClaudePath(null);
-        if (Path.IsPathRooted(resolvedPath))
-        {
-            if (File.Exists(resolvedPath))
-            {
-                return resolvedPath;
-            }
-
-            throw new InvalidOperationException(
-                string.Concat(
-                    PathRootedButMissingMessagePrefix,
-                    Space,
-                    MessageQuote,
-                    resolvedPath,
-                    MessageQuote,
-                    MessageSuffix));
-        }
-
-        if (ClaudeCliLocator.TryResolvePathExecutable(
-                Environment.GetEnvironmentVariable(TestConstants.PathEnvironmentVariable),
-                OperatingSystem.IsWindows(),
-                out var pathExecutable))
-        {
-            return pathExecutable;
-        }
-
-        throw new InvalidOperationException(FailedToResolveExecutablePathMessage);
+        using var client = new ClaudeClient(new ClaudeOptions());
+        return client.GetCliLaunchCommand();
     }
 
     private static string CreateSandboxDirectory()
@@ -194,12 +169,12 @@ public class ClaudeCliSmokeTests
     }
 
     private static async Task<ClaudeProcessResult> RunClaudeAsync(
-        string executablePath,
+        CliLaunchCommand command,
         IReadOnlyDictionary<string, string>? environmentOverrides,
         CancellationToken cancellationToken = default,
         params string[] arguments)
     {
-        var startInfo = new ProcessStartInfo(executablePath)
+        var startInfo = new ProcessStartInfo(command.ExecutablePath)
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -207,6 +182,11 @@ public class ClaudeCliSmokeTests
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        foreach (var prefixArgument in command.PrefixArguments)
+        {
+            startInfo.ArgumentList.Add(prefixArgument);
+        }
 
         foreach (var argument in arguments)
         {
@@ -231,7 +211,7 @@ public class ClaudeCliSmokeTests
                     StartProcessFailedMessagePrefix,
                     Space,
                     MessageQuote,
-                    executablePath,
+                    command.ExecutablePath,
                     MessageQuote,
                     MessageSuffix));
         }

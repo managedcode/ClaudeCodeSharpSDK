@@ -41,7 +41,7 @@ Enable `ManagedCode.ClaudeCodeSharpSDK` to participate as a first-class provider
 - `DataContent` is rejected with `NotSupportedException` because current Claude print-mode support is text-only in this SDK.
 - `ChatOptions.Tools` is ignored.
 - `GetService<ChatClientMetadata>()` currently returns provider name `"ClaudeCodeCLI"`.
-- Streaming events map assistant-message and usage events, not token-level deltas.
+- Streaming maps assistant text and usage events, not token-level deltas. Native Claude `tool_use` blocks and `tool_result` blocks are surfaced as metadata-only `ChatResponseUpdate` values through the fixed `managedcode:activity` categories `claude_tool_use` and `claude_tool_result`; tool names, IDs, inputs, and outputs are not projected into MEAI updates.
 - Once a streaming turn exposes a Claude thread ID, subsequent `ChatResponseUpdate` values keep that `ConversationId` so callers can resume the same session from streaming flows.
 - Usage mapping preserves reported zero cached-token counts as `0`, not `null`.
 - Turn failures (`TurnFailedEvent`) propagate as `InvalidOperationException`.
@@ -164,6 +164,8 @@ flowchart LR
 ---
 
 ## Definition of Done
+
+Native provider failures end the mapped stream only after the upstream CLI event iterator is disposed successfully. A resulting `CliExecutionFailureException` (an `InvalidOperationException` subtype) exposes the CLI exit code when present and sets `RootProcessExitConfirmed` only after root-process exit plus natural redirected-stream EOF; this does not attest to detached descendants or external effects. If iterator cleanup is uncertain, its ordinary cleanup exception takes precedence and no confirmed-failure marker is emitted.
 
 - `ClaudeChatClient` implements `IChatClient` with mapper coverage for the currently supported text-first adapter surface.
 - DI extensions register the client correctly.

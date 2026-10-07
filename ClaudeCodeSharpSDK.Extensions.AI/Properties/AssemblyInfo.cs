@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo(AssemblyNames.TestsAssemblyName)]
+[assembly: InternalsVisibleTo(ExtensionsAssemblyNames.TestsAssemblyName)]
 
-internal static class AssemblyNames
+internal static class ExtensionsAssemblyNames
 {
     internal const string TestsAssemblyName = "ManagedCode.ClaudeCodeSharpSDK.Tests";
 }

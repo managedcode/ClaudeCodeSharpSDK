@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -10,6 +11,7 @@ using ManagedCode.ClaudeCodeSharpSDK.Client;
 using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Internal;
 using ManagedCode.ClaudeCodeSharpSDK.Logging;
+using ManagedCode.ClaudeCodeSharpSDK.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -84,7 +86,7 @@ public sealed class ClaudeExec
         VerboseFlag,
     };
 
-    private readonly string _executablePath;
+    private readonly Lazy<CliLaunchCommand> _cliLaunchCommand;
     private readonly IReadOnlyDictionary<string, string>? _environmentOverride;
     private readonly bool _inheritEnvironmentVariables;
     private readonly TimeSpan _processTerminationTimeout;
@@ -131,7 +133,8 @@ public sealed class ClaudeExec
         ILogger? logger = null,
         bool inheritEnvironmentVariables = true,
         TimeSpan? processTerminationTimeout = null,
-        int maximumProcessOutputCharacters = ClaudeOptions.DefaultMaximumProcessOutputCharacters)
+        int maximumProcessOutputCharacters = ClaudeOptions.DefaultMaximumProcessOutputCharacters,
+        int cliMetadataMaximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters)
     {
         var resolvedTerminationTimeout = processTerminationTimeout ?? ClaudeOptions.DefaultProcessTerminationTimeout;
         if (resolvedTerminationTimeout <= TimeSpan.Zero)
@@ -141,9 +144,10 @@ public sealed class ClaudeExec
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumProcessOutputCharacters);
 
-        _executablePath = ClaudeCliLocator.FindClaudePath(executablePath);
         _environmentOverride = environmentOverride;
         _inheritEnvironmentVariables = inheritEnvironmentVariables;
+        _cliLaunchCommand = new Lazy<CliLaunchCommand>(() => ClaudeCliLocator.FindClaudeCommand(
+            executablePath, BuildEnvironment(null, null), cliMetadataMaximumFileCharacters));
         _processTerminationTimeout = resolvedTerminationTimeout;
         _maximumProcessOutputCharacters = maximumProcessOutputCharacters;
         _baseSettings = baseSettings;
@@ -155,24 +159,10 @@ public sealed class ClaudeExec
     {
         ArgumentNullException.ThrowIfNull(args);
 
-        var commandArgs = BuildCommandArgs(args);
-        var environment = BuildEnvironment(args.BaseUrl, args.ApiKey);
-        var workingDirectory = string.IsNullOrWhiteSpace(args.WorkingDirectory)
-            ? Environment.CurrentDirectory
-            : args.WorkingDirectory;
-        var invocation = new ClaudeProcessInvocation(
-            _executablePath,
-            workingDirectory,
-            commandArgs,
-            environment,
-            args.Input,
-            _processTerminationTimeout)
-        {
-            MaximumProcessOutputCharacters = _maximumProcessOutputCharacters,
-        };
-
-        return RunWithDiagnosticsAsync(invocation, args.CancellationToken);
+        return RunWithDiagnosticsAsync(args, args.CancellationToken);
     }
+
+    internal CliLaunchCommand GetCliLaunchCommand() => _cliLaunchCommand.Value;
 
     internal IReadOnlyList<string> BuildCommandArgs(ClaudeExecArgs args)
     {
@@ -388,16 +378,31 @@ public sealed class ClaudeExec
     }
 
     private async IAsyncEnumerable<string> RunWithDiagnosticsAsync(
-        ClaudeProcessInvocation invocation,
+        ClaudeExecArgs args,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        ClaudeExecLog.Starting(_logger, invocation.ExecutablePath, invocation.Arguments.Count);
-
         if (cancellationToken.IsCancellationRequested)
         {
             ClaudeExecLog.Cancelled(_logger);
             cancellationToken.ThrowIfCancellationRequested();
         }
+
+        var command = _cliLaunchCommand.Value;
+        var workingDirectory = string.IsNullOrWhiteSpace(args.WorkingDirectory)
+            ? Environment.CurrentDirectory
+            : args.WorkingDirectory;
+        var invocation = new ClaudeProcessInvocation(
+            command.ExecutablePath,
+            workingDirectory,
+            BuildCommandArgs(args),
+            BuildEnvironment(args.BaseUrl, args.ApiKey),
+            args.Input,
+            _processTerminationTimeout)
+        {
+            PrefixArguments = command.PrefixArguments,
+            MaximumProcessOutputCharacters = _maximumProcessOutputCharacters,
+        };
+        ClaudeExecLog.Starting(_logger, invocation.ExecutablePath, invocation.Arguments.Count);
 
         var lineCount = 0;
 
@@ -579,6 +584,8 @@ internal sealed record ClaudeProcessInvocation(
     string Input,
     TimeSpan ProcessTerminationTimeout)
 {
+    public ImmutableArray<string> PrefixArguments { get; init; } = [];
+
     public int MaximumProcessOutputCharacters { get; init; } = ClaudeOptions.DefaultMaximumProcessOutputCharacters;
 
     public Action? StandardErrorReaderCompleted { get; init; }
@@ -627,6 +634,11 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
             WorkingDirectory = invocation.WorkingDirectory,
         };
 
+        foreach (var argument in invocation.PrefixArguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
         foreach (var argument in invocation.Arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -642,7 +654,9 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         Task<BoundedProcessOutput>? standardErrorTask = null;
         Task<string?>? standardOutputReadTask = null;
         Task? standardInputWriteTask = null;
+        BoundedProcessOutputReader? standardOutputReader = null;
         using var outputCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var cancellationSignal = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         var standardErrorLimitExceeded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         Exception? cleanupFailure = null;
         cancellationToken.ThrowIfCancellationRequested();
@@ -664,7 +678,7 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         try
         {
             standardErrorTask = ReadBoundedProcessOutputAsync(process.StandardError,
-                invocation.MaximumProcessOutputCharacters, outputCancellation.Token, () =>
+                invocation.MaximumProcessOutputCharacters, CancellationToken.None, () =>
                 {
                     standardErrorLimitExceeded.TrySetResult(true);
                     invocation.StandardErrorOutputLimitExceeded?.Invoke();
@@ -679,17 +693,21 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
 
                     outputCancellation.Cancel();
                 }, invocation.StandardErrorReaderCompleted);
-            var standardOutput = new BoundedProcessOutputReader(process.StandardOutput,
+            standardOutputReader = new BoundedProcessOutputReader(process.StandardOutput,
                 invocation.MaximumProcessOutputCharacters, invocation.StandardOutputReadCompleted);
-            standardOutputReadTask = standardOutput.ReadLineAsync(outputCancellation.Token).AsTask();
+            standardOutputReadTask = standardOutputReader.ReadLineAsync(CancellationToken.None).AsTask();
             standardInputWriteTask = WriteStandardInputAsync(process.StandardInput, invocation.Input, outputCancellation.Token);
             string? line;
             while (true)
             {
                 var readLineTask = standardOutputReadTask!;
                 var completedTask = standardInputWriteTask is null
-                    ? await Task.WhenAny(readLineTask, standardErrorLimitExceeded.Task).ConfigureAwait(false)
-                    : await Task.WhenAny(readLineTask, standardErrorLimitExceeded.Task, standardInputWriteTask).ConfigureAwait(false);
+                    ? await Task.WhenAny(readLineTask, standardErrorLimitExceeded.Task, cancellationSignal).ConfigureAwait(false)
+                    : await Task.WhenAny(readLineTask, standardErrorLimitExceeded.Task, standardInputWriteTask, cancellationSignal).ConfigureAwait(false);
+                if (completedTask == cancellationSignal)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
                 if (completedTask == standardErrorLimitExceeded.Task || standardErrorLimitExceeded.Task.IsCompleted)
                 {
                     try
@@ -743,12 +761,12 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
 
                 if (line.Length == 0)
                 {
-                    standardOutputReadTask = standardOutput.ReadLineAsync(outputCancellation.Token).AsTask();
+                    standardOutputReadTask = standardOutputReader.ReadLineAsync(CancellationToken.None).AsTask();
                     continue;
                 }
 
                 yield return line;
-                standardOutputReadTask = standardOutput.ReadLineAsync(outputCancellation.Token).AsTask();
+                standardOutputReadTask = standardOutputReader.ReadLineAsync(CancellationToken.None).AsTask();
             }
 
             try
@@ -769,7 +787,7 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
                 var details = string.IsNullOrWhiteSpace(standardError)
                     ? ProcessFailedWithoutStderrMessage
                     : standardError.Trim();
-                throw new InvalidOperationException(
+                throw CliExecutionFailureException.FromProcessExit(process.ExitCode,
                     string.Concat(CliExitedWithCodeMessagePrefix, Space, process.ExitCode.ToString(CultureInfo.InvariantCulture), PeriodSpace, details));
             }
         }
@@ -813,11 +831,41 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
                 {
                     // The visible stderr output-limit failure owns this induced broken pipe.
                 }
+                catch (IOException) when (process.HasExited && process.ExitCode != 0 &&
+                                          standardInputWriteTask.IsFaulted &&
+                                          standardInputWriteTask.Exception?.GetBaseException() is IOException)
+                {
+                    // The confirmed nonzero root exit owns this completed stdin broken pipe.
+                }
                 catch (Exception exception)
                 {
                     readerFailures.Add(exception);
                 }
             }
+
+            if (standardOutputReader is not null && !standardOutputReader.ReachedEndOfStream)
+            {
+                var drainResult = await DrainStandardOutputToEofAsync(standardOutputReader, standardOutputReadTask,
+                    invocation.ProcessTerminationTimeout).ConfigureAwait(false);
+                standardOutputReadTask = drainResult.PendingRead;
+                if (drainResult.Failure is not null)
+                {
+                    readerFailures.Add(drainResult.Failure);
+                }
+            }
+
+            if (standardErrorTask is not null)
+            {
+                try
+                {
+                    await ReadStandardErrorAsync(standardErrorTask, invocation.ProcessTerminationTimeout).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    readerFailures.Add(exception);
+                }
+            }
+
             try
             {
                 outputCancellation.Cancel();
@@ -846,6 +894,10 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
             }
             var standardOutputFailure = await ObserveStandardOutputReadAsync(
                 standardOutputReadTask, invocation.ProcessTerminationTimeout).ConfigureAwait(false);
+            if (standardOutputReader is not null && (standardOutputReadTask is null || standardOutputReadTask.IsCompleted))
+            {
+                standardOutputReader.SignalReadCompleted();
+            }
             var standardOutputLimitFailureIsExpected = standardOutputReadTask is { IsFaulted: true } &&
                 standardOutputReadTask.Exception?.GetBaseException() is InvalidOperationException standardOutputLimitException &&
                 string.Equals(standardOutputLimitException.Message, ProcessOutputLimitExceededMessage, StringComparison.Ordinal);
@@ -931,6 +983,37 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         }
     }
 
+    private static async Task<StandardOutputDrainResult> DrainStandardOutputToEofAsync(
+        BoundedProcessOutputReader reader,
+        Task<string?>? pendingRead,
+        TimeSpan timeout)
+    {
+        using var timeoutCancellation = new CancellationTokenSource(timeout);
+        var currentRead = pendingRead;
+        try
+        {
+            while (true)
+            {
+                currentRead ??= reader.ReadLineAsync(CancellationToken.None).AsTask();
+                var line = await currentRead.WaitAsync(timeoutCancellation.Token).ConfigureAwait(false);
+                currentRead = null;
+                if (line is null)
+                {
+                    return new StandardOutputDrainResult(null, null);
+                }
+            }
+        }
+        catch (OperationCanceledException exception) when (timeoutCancellation.IsCancellationRequested)
+        {
+            return new StandardOutputDrainResult(currentRead,
+                new InvalidOperationException(StandardOutputTerminationUnconfirmedMessage, exception));
+        }
+        catch (Exception exception)
+        {
+            return new StandardOutputDrainResult(currentRead, exception);
+        }
+    }
+
     private static async Task<BoundedProcessOutput> ReadBoundedProcessOutputAsync(
         TextReader reader,
         int maximumCharacters,
@@ -958,10 +1041,6 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
                     throw new InvalidOperationException(ProcessOutputLimitExceededMessage);
                 }
             }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Cancellation closes the process pipes in the bounded cleanup path.
         }
         finally
         {
@@ -1019,7 +1098,7 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
         var details = string.IsNullOrWhiteSpace(standardError)
             ? ProcessFailedWithoutStderrMessage
             : standardError.Trim();
-        throw new InvalidOperationException(
+        throw CliExecutionFailureException.FromProcessExit(process.ExitCode,
             string.Concat(CliExitedWithCodeMessagePrefix, Space, process.ExitCode.ToString(CultureInfo.InvariantCulture), PeriodSpace, details));
     }
 
@@ -1071,6 +1150,7 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
 }
 
 internal sealed record BoundedProcessOutput(string Text);
+internal sealed record StandardOutputDrainResult(Task<string?>? PendingRead, Exception? Failure);
 
 internal sealed class BoundedProcessOutputReader(
     TextReader reader,
@@ -1085,6 +1165,8 @@ internal sealed class BoundedProcessOutputReader(
     private int _bufferIndex;
     private int _charactersRead;
     private bool _endOfStream;
+
+    internal bool ReachedEndOfStream => _endOfStream;
 
     public async ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken)
     {
@@ -1102,7 +1184,6 @@ internal sealed class BoundedProcessOutputReader(
                 if (_bufferCount == 0)
                 {
                     _endOfStream = true;
-                    onReadCompleted?.Invoke();
                     return TakeFinalLine();
                 }
             }
@@ -1128,6 +1209,19 @@ internal sealed class BoundedProcessOutputReader(
 
             _line.Append(character);
         }
+    }
+
+    private bool _readCompletionSignaled;
+
+    internal void SignalReadCompleted()
+    {
+        if (_readCompletionSignaled)
+        {
+            return;
+        }
+
+        _readCompletionSignaled = true;
+        onReadCompleted?.Invoke();
     }
 
     private string? TakeFinalLine()

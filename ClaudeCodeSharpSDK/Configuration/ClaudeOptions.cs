@@ -1,4 +1,6 @@
 using System.Text.Json.Nodes;
+using ManagedCode.ClaudeCodeSharpSDK.Execution;
+using ManagedCode.ClaudeCodeSharpSDK.Models;
 using Microsoft.Extensions.Logging;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Configuration;
@@ -42,4 +44,20 @@ public sealed record ClaudeOptions
     public int MaximumProcessOutputCharacters { get; init; } = DefaultMaximumProcessOutputCharacters;
 
     public ILogger? Logger { get; init; }
+
+    /// <summary>Resolves the installed CLI to an executable and safe literal prefix arguments.</summary>
+    public CliLaunchCommand GetCliLaunchCommand()
+    {
+        var exec = new ClaudeExec(
+            ClaudeExecutablePath,
+            EnvironmentVariables,
+            Settings,
+            null,
+            Logger,
+            InheritEnvironmentVariables,
+            ProcessTerminationTimeout,
+            MaximumProcessOutputCharacters,
+            CliMetadataMaximumFileCharacters);
+        return exec.GetCliLaunchCommand();
+    }
 }

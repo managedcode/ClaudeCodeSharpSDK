@@ -15,7 +15,7 @@ Implement `IChatClient` from `Microsoft.Extensions.AI.Abstractions` in a **separ
 
 1. **Separate package** — Core SDK remains M.E.AI-free. The adapter is opt-in, following the pattern of other provider-specific `Extensions.AI` integrations.
 
-2. **Text-first adapter** — The current adapter maps Claude chat usage to assistant text, usage, conversation ID, and streaming updates. It does not attempt to expose every Claude internal item type through custom `AIContent` contracts.
+2. **Text-first adapter with safe activity metadata** — The adapter maps assistant text, usage, and conversation ID. Native Claude tool-use/result events are signaled through fixed `ChatResponseUpdate.AdditionalProperties` activity categories only; the adapter does not expose internal tool names, IDs, inputs, or outputs.
 
 3. **Claude-specific options via `AdditionalProperties`** — Standard `ChatOptions` properties (`ModelId`, `ConversationId`) map directly. Claude-unique features use `claude:*` prefixed keys in `ChatOptions.AdditionalProperties` (for example `claude:permission_mode`, `claude:allowed_tools`, `claude:max_budget_usd`).
 

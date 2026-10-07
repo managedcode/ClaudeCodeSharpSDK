@@ -17,7 +17,6 @@ internal static class ClaudeCliMetadataReader
     private const string NewLine = "\n";
     private const string CarriageReturn = "\r";
     private const string GitTagPrefix = "refs/tags/v";
-    private const string ExecutableExtension = ".exe";
     private const string VersionOutputEmptyMessage = "Claude Code version output is empty.";
     private const string VersionOutputParseFailedMessagePrefix = "Failed to parse Claude Code version output:";
     private const string UpdateInstalledVersionSegment = "installed ";
@@ -38,7 +37,6 @@ internal static class ClaudeCliMetadataReader
     private const string UpdateAvailableMessagePrefix = "Claude Code update is available:";
     private const string UpdateCheckFailedMessagePrefix = "Failed to check latest Claude Code version from GitHub:";
 
-    private const string GitExecutableName = "git";
     private const string GitLsRemoteCommand = "ls-remote";
     private const string GitTagsArgument = "--tags";
     private const string GitRefsArgument = "--refs";
@@ -64,14 +62,26 @@ internal static class ClaudeCliMetadataReader
         TimeSpan probeTimeout,
         int maximumOutputCharacters,
         int maximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters,
+        TimeSpan? probeLeaseTimeout = null) =>
+        Read(new CliLaunchCommand(executablePath, []), environment, inheritEnvironmentVariables, probeTimeout,
+            maximumOutputCharacters, maximumFileCharacters, probeLeaseTimeout);
+
+    public static ClaudeCliMetadata Read(
+        CliLaunchCommand command,
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables,
+        TimeSpan probeTimeout,
+        int maximumOutputCharacters,
+        int maximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters,
         TimeSpan? probeLeaseTimeout = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command.ExecutablePath);
         ArgumentNullException.ThrowIfNull(environment);
         var leaseTimeout = probeLeaseTimeout ?? ClaudeOptions.DefaultCliMetadataProbeLeaseTimeout;
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(leaseTimeout, TimeSpan.Zero);
 
-        var installedVersion = ReadInstalledVersion(executablePath, environment, inheritEnvironmentVariables,
+        var installedVersion = ReadInstalledVersion(command, environment, inheritEnvironmentVariables,
             probeTimeout, maximumOutputCharacters, leaseTimeout);
         return new ClaudeCliMetadata(installedVersion,
             ReadDefaultModel(environment, inheritEnvironmentVariables, maximumFileCharacters), ClaudeModels.Known);
@@ -87,14 +97,25 @@ internal static class ClaudeCliMetadataReader
         bool inheritEnvironmentVariables,
         TimeSpan probeTimeout,
         int maximumOutputCharacters,
+        TimeSpan? probeLeaseTimeout = null) =>
+        ReadUpdateStatus(new CliLaunchCommand(executablePath, []), environment, inheritEnvironmentVariables,
+            probeTimeout, maximumOutputCharacters, probeLeaseTimeout);
+
+    public static ClaudeCliUpdateStatus ReadUpdateStatus(
+        CliLaunchCommand command,
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables,
+        TimeSpan probeTimeout,
+        int maximumOutputCharacters,
         TimeSpan? probeLeaseTimeout = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command.ExecutablePath);
         ArgumentNullException.ThrowIfNull(environment);
         var leaseTimeout = probeLeaseTimeout ?? ClaudeOptions.DefaultCliMetadataProbeLeaseTimeout;
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(leaseTimeout, TimeSpan.Zero);
 
-        var installedVersion = ReadInstalledVersion(executablePath, environment, inheritEnvironmentVariables,
+        var installedVersion = ReadInstalledVersion(command, environment, inheritEnvironmentVariables,
             probeTimeout, maximumOutputCharacters, leaseTimeout);
         var probe = ProbeLatestPublishedVersion(environment, inheritEnvironmentVariables, probeTimeout,
             maximumOutputCharacters, leaseTimeout);
@@ -353,14 +374,14 @@ internal static class ClaudeCliMetadataReader
     }
 
     private static string ReadInstalledVersion(
-        string executablePath,
+        CliLaunchCommand command,
         IReadOnlyDictionary<string, string> environment,
         bool inheritEnvironmentVariables,
         TimeSpan probeTimeout,
         int maximumOutputCharacters,
         TimeSpan leaseTimeout)
     {
-        var probe = BoundedCliProcessProbe.Run(executablePath, [VersionFlag], environment,
+        var probe = BoundedCliProcessProbe.Run(command, [VersionFlag], environment,
             inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters,
             leaseAcquisitionTimeout: leaseTimeout);
         if (probe.ExitCode != 0)
@@ -387,10 +408,8 @@ internal static class ClaudeCliMetadataReader
     {
         try
         {
-            var gitExecutable = OperatingSystem.IsWindows()
-                ? string.Concat(GitExecutableName, ExecutableExtension)
-                : GitExecutableName;
-            var probe = BoundedCliProcessProbe.Run(gitExecutable,
+            var gitCommand = ClaudeCliLocator.ResolveGitCommand(environment);
+            var probe = BoundedCliProcessProbe.Run(gitCommand,
                 [GitLsRemoteCommand, GitTagsArgument, GitRefsArgument, RepositoryUrl], environment,
                 inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters,
                 leaseAcquisitionTimeout: leaseTimeout);
