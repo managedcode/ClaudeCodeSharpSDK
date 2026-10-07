@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using ManagedCode.ClaudeCodeSharpSDK.Client;
+using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Internal;
 using ManagedCode.ClaudeCodeSharpSDK.Models;
 
@@ -6,6 +8,11 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Unit;
 
 public class ClaudeCliMetadataReaderTests
 {
+    private const string MetadataSandboxPrefix = "ClaudeCliMetadataReaderTests-";
+    private const string PathEnvironmentVariable = "PATH";
+    private const string ClaudeConfigDirectoryEnvironmentVariable = "CLAUDE_CONFIG_DIR";
+    private const string SettingsFileName = "settings.json";
+    private const string ClaudeSettingsFixture = "{ \"model\": \"" + ClaudeModels.Sonnet + "\" }";
     private const string CommandFlagUnix = "-c";
     private const string CommandFlagWindows = "/c";
     private const string ConcurrentOutputCommandUnix =
@@ -111,6 +118,37 @@ public class ClaudeCliMetadataReaderTests
         await Assert.That(standardOutput).Contains(LastStandardOutputLine);
         await Assert.That(standardError).Contains(FirstStandardErrorLine);
         await Assert.That(standardError).Contains(LastStandardErrorLine);
+    }
+
+    [Test]
+    public async Task ClaudeClient_GetCliMetadata_UsesConfiguredSettingsAndEnvironmentAllowlist()
+    {
+        var configDirectory = Path.Combine(Environment.CurrentDirectory, "tests", ".sandbox",
+            $"{MetadataSandboxPrefix}{Guid.NewGuid():N}");
+        Directory.CreateDirectory(configDirectory);
+        try
+        {
+            File.WriteAllText(Path.Combine(configDirectory, SettingsFileName), ClaudeSettingsFixture);
+            using var client = new ClaudeClient(new ClaudeOptions
+            {
+                ClaudeExecutablePath = ClaudeCliLocator.FindClaudePath(null),
+                EnvironmentVariables = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [PathEnvironmentVariable] = Environment.GetEnvironmentVariable(PathEnvironmentVariable) ?? string.Empty,
+                    [ClaudeConfigDirectoryEnvironmentVariable] = configDirectory,
+                },
+                InheritEnvironmentVariables = false,
+            });
+
+            var metadata = client.GetCliMetadata();
+
+            await Assert.That(metadata.DefaultModel).IsEqualTo(ClaudeModels.Sonnet);
+            await Assert.That(string.IsNullOrWhiteSpace(metadata.InstalledVersion)).IsFalse();
+        }
+        finally
+        {
+            Directory.Delete(configDirectory, recursive: true);
+        }
     }
 
     private static ProcessStartInfo CreateConcurrentOutputProcessStartInfo()

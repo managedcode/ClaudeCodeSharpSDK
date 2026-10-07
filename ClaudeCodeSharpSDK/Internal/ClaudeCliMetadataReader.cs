@@ -17,12 +17,8 @@ internal static class ClaudeCliMetadataReader
     private const string CarriageReturn = "\r";
     private const string GitTagPrefix = "refs/tags/v";
     private const string ExecutableExtension = ".exe";
-    private const string StartGitProcessFailedMessage = "Failed to start git process.";
     private const string VersionOutputEmptyMessage = "Claude Code version output is empty.";
     private const string VersionOutputParseFailedMessagePrefix = "Failed to parse Claude Code version output:";
-    private const string StartExecutableFailedMessagePrefix = "Failed to start Claude Code executable";
-    private const string ReadVersionFailedMessagePrefix = "Claude Code CLI exited with code";
-    private const string ReadVersionFailedMessageMiddle = "while reading version.";
     private const string UpdateInstalledVersionSegment = "installed ";
     private const string UpdateLatestVersionSegment = ", latest ";
     private const string UpdateRunCommandSegment = ". Run ";
@@ -31,6 +27,11 @@ internal static class ClaudeCliMetadataReader
     private const string MessageQuote = "'";
     private const string MessageSuffix = ".";
 
+    private static readonly IReadOnlyDictionary<string, string> EmptyEnvironment = new Dictionary<string, string>(StringComparer.Ordinal);
+    private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(10);
+    private const int DefaultMaximumOutputCharacters = 65536;
+    private const string ProbeFailureMessage = "Claude Code CLI metadata probe failed.";
+    private const string InvalidProbeOutputMessage = "Claude Code CLI metadata probe returned invalid output.";
     private const string VersionFlag = "--version";
     private const string UpdateCommand = "claude update";
     private const string UpdateAvailableMessagePrefix = "Claude Code update is available:";
@@ -43,26 +44,50 @@ internal static class ClaudeCliMetadataReader
     private const string RepositoryUrl = "https://github.com/anthropics/claude-code.git";
 
     private const string ClaudeConfigDirEnvironmentVariable = "CLAUDE_CONFIG_DIR";
+    private const string HomeEnvironmentVariable = "HOME";
+    private const string UserProfileEnvironmentVariable = "USERPROFILE";
     private const string ClaudeConfigDirectoryName = ".claude";
     private const string SettingsFileName = "settings.json";
     private const string SettingsLocalFileName = "settings.local.json";
     private const string ModelPropertyName = "model";
     private const string FallbackDefaultModel = ClaudeModels.Sonnet;
 
-    public static ClaudeCliMetadata Read(string executablePath)
+    public static ClaudeCliMetadata Read(string executablePath) =>
+        Read(executablePath, EmptyEnvironment, true, DefaultProbeTimeout, DefaultMaximumOutputCharacters);
+
+    public static ClaudeCliMetadata Read(
+        string executablePath,
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables,
+        TimeSpan probeTimeout,
+        int maximumOutputCharacters)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        ArgumentNullException.ThrowIfNull(environment);
 
-        var installedVersion = ReadInstalledVersion(executablePath);
-        return new ClaudeCliMetadata(installedVersion, ReadDefaultModel(), ClaudeModels.Known);
+        var installedVersion = ReadInstalledVersion(executablePath, environment, inheritEnvironmentVariables,
+            probeTimeout, maximumOutputCharacters);
+        return new ClaudeCliMetadata(installedVersion,
+            ReadDefaultModel(environment, inheritEnvironmentVariables), ClaudeModels.Known);
     }
 
-    public static ClaudeCliUpdateStatus ReadUpdateStatus(string executablePath)
+    public static ClaudeCliUpdateStatus ReadUpdateStatus(string executablePath) =>
+        ReadUpdateStatus(executablePath, EmptyEnvironment, true, DefaultProbeTimeout, DefaultMaximumOutputCharacters);
+
+    public static ClaudeCliUpdateStatus ReadUpdateStatus(
+        string executablePath,
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables,
+        TimeSpan probeTimeout,
+        int maximumOutputCharacters)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        ArgumentNullException.ThrowIfNull(environment);
 
-        var installedVersion = ReadInstalledVersion(executablePath);
-        var probe = ProbeLatestPublishedVersion();
+        var installedVersion = ReadInstalledVersion(executablePath, environment, inheritEnvironmentVariables,
+            probeTimeout, maximumOutputCharacters);
+        var probe = ProbeLatestPublishedVersion(environment, inheritEnvironmentVariables, probeTimeout,
+            maximumOutputCharacters);
 
         if (!string.IsNullOrWhiteSpace(probe.ErrorMessage))
         {
@@ -317,80 +342,51 @@ internal static class ClaudeCliMetadataReader
         return string.CompareOrdinal(left, right);
     }
 
-    private static string ReadInstalledVersion(string executablePath)
+    private static string ReadInstalledVersion(
+        string executablePath,
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables,
+        TimeSpan probeTimeout,
+        int maximumOutputCharacters)
     {
-        var startInfo = new ProcessStartInfo(executablePath)
+        var probe = BoundedCliProcessProbe.Run(executablePath, [VersionFlag], environment,
+            inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters);
+        if (probe.ExitCode != 0)
         {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        startInfo.ArgumentList.Add(VersionFlag);
-
-        using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException(
-                                string.Concat(StartExecutableFailedMessagePrefix, Space, MessageQuote, executablePath, MessageQuote, MessageSuffix));
-
-        process.StandardInput.Close();
-        var (standardOutput, standardError) = ReadStandardStreamsAndWaitForExit(process);
-
-        if (process.ExitCode != 0)
-        {
-            var details = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
-            throw new InvalidOperationException(
-                string.Concat(
-                    ReadVersionFailedMessagePrefix,
-                    Space,
-                    process.ExitCode.ToString(CultureInfo.InvariantCulture),
-                    Space,
-                    ReadVersionFailedMessageMiddle,
-                    Space,
-                    details).Trim());
+            throw new InvalidOperationException(ProbeFailureMessage);
         }
 
-        return ParseInstalledVersion(standardOutput);
+        try
+        {
+            return ParseInstalledVersion(probe.StandardOutput);
+        }
+        catch (InvalidOperationException)
+        {
+            throw new InvalidOperationException(InvalidProbeOutputMessage);
+        }
     }
 
-    private static (string? LatestVersion, string? ErrorMessage) ProbeLatestPublishedVersion()
+    private static (string? LatestVersion, string? ErrorMessage) ProbeLatestPublishedVersion(
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables,
+        TimeSpan probeTimeout,
+        int maximumOutputCharacters)
     {
         try
         {
-            var gitExecutable = OperatingSystem.IsWindows() ? string.Concat(GitExecutableName, ExecutableExtension) : GitExecutableName;
-            var startInfo = new ProcessStartInfo(gitExecutable)
-            {
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            startInfo.ArgumentList.Add(GitLsRemoteCommand);
-            startInfo.ArgumentList.Add(GitTagsArgument);
-            startInfo.ArgumentList.Add(GitRefsArgument);
-            startInfo.ArgumentList.Add(RepositoryUrl);
-
-            using var process = Process.Start(startInfo);
-            if (process is null)
-            {
-                return (null, StartGitProcessFailedMessage);
-            }
-
-            process.StandardInput.Close();
-            var (standardOutput, standardError) = ReadStandardStreamsAndWaitForExit(process);
-
-            if (process.ExitCode != 0)
-            {
-                return (null, string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError);
-            }
-
-            return (ParseLatestPublishedVersion(standardOutput), null);
+            var gitExecutable = OperatingSystem.IsWindows()
+                ? string.Concat(GitExecutableName, ExecutableExtension)
+                : GitExecutableName;
+            var probe = BoundedCliProcessProbe.Run(gitExecutable,
+                [GitLsRemoteCommand, GitTagsArgument, GitRefsArgument, RepositoryUrl], environment,
+                inheritEnvironmentVariables, probeTimeout, maximumOutputCharacters);
+            return probe.ExitCode == 0
+                ? (ParseLatestPublishedVersion(probe.StandardOutput), null)
+                : (null, ProbeFailureMessage);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            return (null, exception.Message);
+            return (null, ProbeFailureMessage);
         }
     }
 
@@ -442,9 +438,11 @@ internal static class ClaudeCliMetadataReader
         builder.Append(data);
     }
 
-    private static string ReadDefaultModel()
+    private static string ReadDefaultModel(
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables)
     {
-        foreach (var settingsPath in EnumerateSettingsFiles())
+        foreach (var settingsPath in EnumerateSettingsFiles(environment, inheritEnvironmentVariables))
         {
             if (!File.Exists(settingsPath))
             {
@@ -468,7 +466,9 @@ internal static class ClaudeCliMetadataReader
         return FallbackDefaultModel;
     }
 
-    private static IEnumerable<string> EnumerateSettingsFiles()
+    private static IEnumerable<string> EnumerateSettingsFiles(
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables)
     {
         var current = new DirectoryInfo(Environment.CurrentDirectory);
         while (current is not null)
@@ -478,10 +478,15 @@ internal static class ClaudeCliMetadataReader
             current = current.Parent;
         }
 
-        var configRoot = Environment.GetEnvironmentVariable(ClaudeConfigDirEnvironmentVariable);
+        var configRoot = environment.GetValueOrDefault(ClaudeConfigDirEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(configRoot) && inheritEnvironmentVariables)
+        {
+            configRoot = Environment.GetEnvironmentVariable(ClaudeConfigDirEnvironmentVariable);
+        }
+
         if (string.IsNullOrWhiteSpace(configRoot))
         {
-            var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var homeDirectory = ResolveHomeDirectory(environment, inheritEnvironmentVariables);
             if (!string.IsNullOrWhiteSpace(homeDirectory))
             {
                 configRoot = Path.Combine(homeDirectory, ClaudeConfigDirectoryName);
@@ -492,6 +497,38 @@ internal static class ClaudeCliMetadataReader
         {
             yield return Path.Combine(configRoot, SettingsFileName);
         }
+    }
+
+    private static string ResolveHomeDirectory(
+        IReadOnlyDictionary<string, string> environment,
+        bool inheritEnvironmentVariables)
+    {
+        if (environment.TryGetValue(HomeEnvironmentVariable, out var home) && !string.IsNullOrWhiteSpace(home))
+        {
+            return home;
+        }
+
+        if (environment.TryGetValue(UserProfileEnvironmentVariable, out var profile) && !string.IsNullOrWhiteSpace(profile))
+        {
+            return profile;
+        }
+
+        if (inheritEnvironmentVariables)
+        {
+            var inheritedHome = Environment.GetEnvironmentVariable(HomeEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(inheritedHome))
+            {
+                return inheritedHome;
+            }
+
+            var inheritedProfile = Environment.GetEnvironmentVariable(UserProfileEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(inheritedProfile))
+            {
+                return inheritedProfile;
+            }
+        }
+
+        return inheritEnvironmentVariables ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : string.Empty;
     }
 
     internal readonly record struct SemanticVersion(

@@ -45,6 +45,8 @@ The repository's upstream sync workflow separately tracks source changes in `ant
 - SDK option and metadata decisions are based on real Claude Code CLI behavior, not any separate SDK surface.
 - Update check failures (for example missing `git` or network access) must return actionable status messages and never silently fail.
 - Version/update probes must drain subprocess stdout and stderr concurrently so CLI metadata reads cannot deadlock on buffered process output.
+- Metadata subprocesses use the same configured environment policy as SDK execution, and their runtime/output bounds are configured by `ClaudeOptions.CliMetadataProbeTimeout` and `ClaudeOptions.CliMetadataMaximumOutputCharacters`.
+- A timeout kills the process tree and confirms root-process exit. Output is drained concurrently with bounded capture; exceeding either stream's cap fails the probe instead of parsing partial output.
 - The upstream sync watcher must raise a repository issue when `anthropics/claude-code` moves ahead of the pinned submodule SHA.
 
 ---

@@ -65,13 +65,19 @@ public sealed class ClaudeClient : IDisposable
     public ClaudeCliMetadata GetCliMetadata()
     {
         var executablePath = ClaudeCliLocator.FindClaudePath(_options.ClaudeExecutablePath);
-        return ClaudeCliMetadataReader.Read(executablePath);
+        var exec = CreateExec();
+        return ClaudeCliMetadataReader.Read(executablePath, exec.BuildEnvironment(_options.BaseUrl, _options.ApiKey),
+            _options.InheritEnvironmentVariables, _options.CliMetadataProbeTimeout,
+            _options.CliMetadataMaximumOutputCharacters);
     }
 
     public ClaudeCliUpdateStatus GetCliUpdateStatus()
     {
         var executablePath = ClaudeCliLocator.FindClaudePath(_options.ClaudeExecutablePath);
-        return ClaudeCliMetadataReader.ReadUpdateStatus(executablePath);
+        var exec = CreateExec();
+        return ClaudeCliMetadataReader.ReadUpdateStatus(executablePath,
+            exec.BuildEnvironment(_options.BaseUrl, _options.ApiKey), _options.InheritEnvironmentVariables,
+            _options.CliMetadataProbeTimeout, _options.CliMetadataMaximumOutputCharacters);
     }
 
     public void Dispose() => _connectionState.Dispose();

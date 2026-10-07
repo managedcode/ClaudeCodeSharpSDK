@@ -7,6 +7,10 @@ public sealed record ClaudeOptions
 {
     public static readonly TimeSpan DefaultProcessTerminationTimeout = TimeSpan.FromSeconds(5);
 
+    public static readonly TimeSpan DefaultCliMetadataProbeTimeout = TimeSpan.FromSeconds(10);
+
+    public const int DefaultCliMetadataMaximumOutputCharacters = 65536;
+
     public string? ClaudeExecutablePath { get; init; }
 
     public string? BaseUrl { get; init; }
@@ -20,6 +24,10 @@ public sealed record ClaudeOptions
     public bool InheritEnvironmentVariables { get; init; } = true;
 
     public TimeSpan ProcessTerminationTimeout { get; init; } = DefaultProcessTerminationTimeout;
+
+    public TimeSpan CliMetadataProbeTimeout { get; init; } = DefaultCliMetadataProbeTimeout;
+
+    public int CliMetadataMaximumOutputCharacters { get; init; } = DefaultCliMetadataMaximumOutputCharacters;
 
     public ILogger? Logger { get; init; }
 }
