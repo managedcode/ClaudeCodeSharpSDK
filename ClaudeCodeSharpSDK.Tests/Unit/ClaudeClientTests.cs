@@ -1,6 +1,7 @@
 using ManagedCode.ClaudeCodeSharpSDK.Client;
 using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Execution;
+using ManagedCode.ClaudeCodeSharpSDK.Models;
 using ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Unit;
@@ -9,6 +10,15 @@ public class ClaudeClientTests
 {
     private const string CallStartAsyncFirstMessageFragment = "Call StartAsync first";
     private const string ExistingSessionId = "session-42";
+
+    [Test]
+    public async Task CliCompatibilityTarget_MatchesPackageVersionPrefix()
+    {
+        var packageVersion = typeof(ClaudeClient).Assembly.GetName().Version;
+        await Assert.That(packageVersion).IsNotNull();
+        await Assert.That($"{packageVersion!.Major}.{packageVersion.Minor}.{packageVersion.Build}")
+            .IsEqualTo(ClaudeCliCompatibility.TargetVersion);
+    }
 
     [Test]
     public async Task StartThread_WithAutoStartDisabled_Throws()
