@@ -134,7 +134,8 @@ public sealed class ClaudeExec
         bool inheritEnvironmentVariables = true,
         TimeSpan? processTerminationTimeout = null,
         int maximumProcessOutputCharacters = ClaudeOptions.DefaultMaximumProcessOutputCharacters,
-        int cliMetadataMaximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters)
+        int cliMetadataMaximumFileCharacters = ClaudeOptions.DefaultCliMetadataMaximumFileCharacters,
+        CliLaunchCommand? launchCommand = null)
     {
         var resolvedTerminationTimeout = processTerminationTimeout ?? ClaudeOptions.DefaultProcessTerminationTimeout;
         if (resolvedTerminationTimeout <= TimeSpan.Zero)
@@ -146,7 +147,7 @@ public sealed class ClaudeExec
 
         _environmentOverride = environmentOverride;
         _inheritEnvironmentVariables = inheritEnvironmentVariables;
-        _cliLaunchCommand = new Lazy<CliLaunchCommand>(() => ClaudeCliLocator.FindClaudeCommand(
+        _cliLaunchCommand = new Lazy<CliLaunchCommand>(() => launchCommand ?? ClaudeCliLocator.FindClaudeCommand(
             executablePath, BuildEnvironment(null, null), cliMetadataMaximumFileCharacters));
         _processTerminationTimeout = resolvedTerminationTimeout;
         _maximumProcessOutputCharacters = maximumProcessOutputCharacters;

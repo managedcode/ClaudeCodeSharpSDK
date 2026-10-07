@@ -21,6 +21,9 @@ public sealed record ClaudeOptions
 
     public string? ClaudeExecutablePath { get; init; }
 
+    /// <summary>Uses a previously verified SDK launch descriptor, such as the result of CLI installation.</summary>
+    public CliLaunchCommand? LaunchCommand { get; init; }
+
     public string? BaseUrl { get; init; }
 
     public string? ApiKey { get; init; }
@@ -57,7 +60,8 @@ public sealed record ClaudeOptions
             InheritEnvironmentVariables,
             ProcessTerminationTimeout,
             MaximumProcessOutputCharacters,
-            CliMetadataMaximumFileCharacters);
+            CliMetadataMaximumFileCharacters,
+            LaunchCommand);
         return exec.GetCliLaunchCommand();
     }
 }

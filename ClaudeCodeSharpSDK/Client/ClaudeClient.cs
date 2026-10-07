@@ -74,6 +74,13 @@ public sealed class ClaudeClient : IDisposable
 
     public CliLaunchCommand GetCliLaunchCommand() => CreateExec().GetCliLaunchCommand();
 
+    /// <summary>Installs or updates Claude Code in its SDK-owned isolated root at the exact compatibility target.</summary>
+    public IAsyncEnumerable<CliInstallationUpdate> InstallOrUpdateCliAsync(
+        CliInstallationOptions installationOptions,
+        CancellationToken cancellationToken = default) =>
+        ClaudeCliInstallation.InstallOrUpdateAsync(installationOptions,
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), cancellationToken);
+
     public ClaudeCliUpdateStatus GetCliUpdateStatus()
     {
         var exec = CreateExec();
@@ -98,7 +105,8 @@ public sealed class ClaudeClient : IDisposable
             executablePath: _options.ClaudeExecutablePath,
             environmentOverride: _options.EnvironmentVariables,
             baseSettings: _options.Settings,
-            logger: _options.Logger);
+            logger: _options.Logger,
+            launchCommand: _options.LaunchCommand);
     }
 
     private static ClaudeClientOptions CreateClientOptions(ClaudeOptions options)
