@@ -1076,6 +1076,14 @@ internal sealed class DefaultClaudeProcessRunner : IClaudeProcessRunner
             await ThrowIfExitedWithFailureAsync(process, standardErrorTask, processTerminationTimeout).ConfigureAwait(false);
             throw;
         }
+        catch (IOException) when (standardInputWriteTask.IsFaulted &&
+                                  standardInputWriteTask.Exception?.GetBaseException() is IOException)
+        {
+            await process.WaitForExitAsync(CancellationToken.None).WaitAsync(processTerminationTimeout, CancellationToken.None)
+                .ConfigureAwait(false);
+            await ThrowIfExitedWithFailureAsync(process, standardErrorTask, processTerminationTimeout).ConfigureAwait(false);
+            throw;
+        }
         catch (Exception) when (process.HasExited)
         {
             await process.WaitForExitAsync(CancellationToken.None).WaitAsync(processTerminationTimeout, cancellationToken).ConfigureAwait(false);

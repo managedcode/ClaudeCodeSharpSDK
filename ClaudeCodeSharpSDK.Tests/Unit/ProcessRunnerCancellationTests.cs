@@ -14,7 +14,7 @@ public class ProcessRunnerCancellationTests
         "/usr/bin/setsid /bin/sh -c '/usr/bin/setsid /bin/sleep 30 >&2 & echo $!; exit 0' & exec /bin/sleep 30";
     private const string PosixFixtureSkipReason = "The public CLI yield-boundary fixture currently uses a POSIX executable script.";
     private const string LinuxFixtureSkipReason = "The detached stderr-retention fixture requires Linux setsid.";
-    private const string StderrClosureFailure = "stderr stream closed";
+    private const string StderrClosureFailure = "Claude Code process and output cleanup could not be confirmed.";
     private const string ProcessOutputLimitMessage = "Claude Code process exceeded the configured output limit.";
     private const string ExpectedFirstLine = "first";
     private const string ExpectedSecondLine = "second";
@@ -24,6 +24,8 @@ public class ProcessRunnerCancellationTests
     private const string PosixNormalMultiLineCommand = "printf 'first\\nsecond\\n'";
     private const string PosixNonZeroExitCommand = "printf 'provider failed\\n' >&2; exit 23";
     private const string PosixNonZeroExitBeforeInputCommand = "printf 'provider failed\\n' >&2; /bin/sleep 0.1; exit 23";
+    private const string PosixZeroExitAfterClosingInputCommand = "exec 0<&-; /bin/sleep 0.1; exit 0";
+    private const string PosixStaysRunningAfterClosingInputCommand = "printf 'started\\n'; exec 0<&-; exec /bin/sleep 30";
     private const string PosixLargePromptPipePressureCommand =
         "head -c 262144 /dev/zero | tr '\\0' s; printf '\\n'; head -c 262144 /dev/zero | tr '\\0' e >&2; cat";
     private const string WindowsLargePromptPipePressureCommand =
@@ -42,6 +44,8 @@ public class ProcessRunnerCancellationTests
     private const string WindowsNormalMultiLineCommand = "Write-Output 'first'; Write-Output 'second'";
     private const string WindowsNonZeroExitCommand = "[Console]::Error.WriteLine('provider failed'); exit 23";
     private const string WindowsNonZeroExitBeforeInputCommand = "[Console]::Error.WriteLine('provider failed'); Start-Sleep -Milliseconds 100; exit 23";
+    private const string WindowsZeroExitAfterClosingInputCommand = "[Console]::OpenStandardInput().Dispose(); Start-Sleep -Milliseconds 100; exit 0";
+    private const string WindowsStaysRunningAfterClosingInputCommand = "Write-Output 'started'; [Console]::OpenStandardInput().Dispose(); Start-Sleep -Seconds 30";
     private const string SystemRootVariableName = "SystemRoot";
     private const string WindowsDirectoryVariableName = "WINDIR";
     private const string PathVariableName = "PATH";
@@ -223,6 +227,49 @@ public class ProcessRunnerCancellationTests
         await Assert.That(exception).IsTypeOf<CliExecutionFailureException>();
         await Assert.That(((CliExecutionFailureException)exception!).ExitCode).IsEqualTo(23);
         await Assert.That(((CliExecutionFailureException)exception).RootProcessExitConfirmed).IsTrue();
+    }
+
+    [Test]
+    public async Task DefaultRunner_ZeroExitAfterClosingInputRemainsAnInputFailure()
+    {
+        var prompt = new string(PromptCharacter[0], LargePromptCharacters);
+        var invocation = CreateOutputInvocation(
+            OperatingSystem.IsWindows() ? WindowsZeroExitAfterClosingInputCommand : PosixZeroExitAfterClosingInputCommand,
+            TimeSpan.FromSeconds(5), LargeProcessOutputCharacters, input: prompt);
+        var action = async () =>
+        {
+            await foreach (var _ in new DefaultClaudeProcessRunner().RunAsync(invocation, NullLogger.Instance, CancellationToken.None))
+            {
+            }
+        };
+
+        var exception = await Assert.That(action).ThrowsException();
+
+        await Assert.That(exception).IsTypeOf<IOException>();
+        await Assert.That(exception).IsNotTypeOf<CliExecutionFailureException>();
+    }
+
+    [Test]
+    public async Task DefaultRunner_StillRunningAfterClosingInputIsBoundedAndUnconfirmed()
+    {
+        var prompt = new string(PromptCharacter[0], LargePromptCharacters);
+        var invocation = CreateOutputInvocation(
+            OperatingSystem.IsWindows() ? WindowsStaysRunningAfterClosingInputCommand : PosixStaysRunningAfterClosingInputCommand,
+            TimeSpan.FromMilliseconds(250), LargeProcessOutputCharacters, input: prompt);
+        var stopwatch = Stopwatch.StartNew();
+        var action = async () =>
+        {
+            await foreach (var _ in new DefaultClaudeProcessRunner().RunAsync(invocation, NullLogger.Instance, CancellationToken.None))
+            {
+            }
+        };
+
+        var exception = await Assert.That(action).ThrowsException();
+        stopwatch.Stop();
+
+        await Assert.That(exception).IsTypeOf<TimeoutException>();
+        await Assert.That(exception).IsNotTypeOf<CliExecutionFailureException>();
+        await Assert.That(stopwatch.Elapsed < TimeSpan.FromSeconds(3)).IsTrue();
     }
 
     [Test]

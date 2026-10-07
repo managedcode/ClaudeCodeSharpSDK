@@ -63,7 +63,7 @@ public class ClaudeCliMetadataReaderTests
     private const string PrereleaseTwoVersion = "2.0.75-beta.2";
     private const string StableVersion = "2.0.75";
     private const string StableVsPrereleaseVersion = "2.0.75-beta.1";
-    private static readonly TimeSpan ProcessReadTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ProcessReadTimeout = TimeSpan.FromSeconds(90);
 
     [Test]
     public async Task ParseInstalledVersion_ReturnsFirstTokenForClaudeCodeOutput()

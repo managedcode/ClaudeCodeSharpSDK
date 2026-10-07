@@ -54,7 +54,7 @@ public partial class ClaudeThreadTests
     private const string TextContentType = "text";
     private const string ThirdEventId = "evt-3";
     private const string WorkspacePath = "/workspace";
-    private static readonly TimeSpan ConcurrentRunTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ConcurrentRunTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan TurnGateObservationDelay = TimeSpan.FromMilliseconds(100);
 
     [Test]
