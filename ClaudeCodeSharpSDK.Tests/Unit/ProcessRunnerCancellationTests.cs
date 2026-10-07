@@ -48,6 +48,7 @@ public class ProcessRunnerCancellationTests
     private const string WindowsNonZeroExitCommand = "[Console]::Error.WriteLine('provider failed'); exit 23";
     private const string WindowsNonZeroExitBeforeInputCommand = "[Console]::Error.WriteLine('provider failed'); Start-Sleep -Milliseconds 100; exit 23";
     private const string WindowsZeroExitAfterClosingInputCommand = "[Console]::OpenStandardInput().Dispose(); Start-Sleep -Milliseconds 100; exit 0";
+    private const string WindowsClosingInputFixtureCommand = "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class CliTestNativeInput { [DllImport(\"kernel32.dll\")] public static extern bool CloseHandle(IntPtr handle); [DllImport(\"kernel32.dll\")] public static extern IntPtr GetStdHandle(int handle); }'; $ready=$args[0]; $release=$args[1]; $closed=$args[2]; [IO.File]::WriteAllText($ready,[string]$PID); Write-Output 'ready'; while(-not (Test-Path -LiteralPath $release)){Start-Sleep -Milliseconds 10}; [CliTestNativeInput]::CloseHandle([CliTestNativeInput]::GetStdHandle(-10)); [IO.File]::WriteAllText($closed,[string]$PID); Write-Output 'closed'; Start-Sleep -Seconds 30";
     private const string WindowsNodeExecutableName = "node.exe";
     private const string NodeEvaluationFlag = "-e";
     private const string NodeReadyLine = "ready";
@@ -286,10 +287,14 @@ public class ProcessRunnerCancellationTests
         var releasePath = Path.Combine(sandbox, string.Concat(fixtureId, ReleaseFileExtension));
         var closedPath = Path.Combine(sandbox, string.Concat(fixtureId, ClosedFileExtension));
         var stdinFailureObserved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executablePath = OperatingSystem.IsWindows() ? WindowsPowerShellPath : FindNodeExecutablePath();
+        string[] arguments = OperatingSystem.IsWindows()
+            ? [PowerShellNoProfileFlag, PowerShellNonInteractiveFlag, PowerShellCommandFlag, WindowsClosingInputFixtureCommand, readyPath, releasePath, closedPath]
+            : [NodeEvaluationFlag, NodeClosingInputFixture, readyPath, releasePath, closedPath];
         var invocation = new ClaudeProcessInvocation(
-            FindNodeExecutablePath(),
+            executablePath,
             sandbox,
-            [NodeEvaluationFlag, NodeClosingInputFixture, readyPath, releasePath, closedPath],
+            arguments,
             OperatingSystem.IsWindows() ? CreateWindowsProcessEnvironment() : CreateEnvironment(),
             new string(PromptCharacter[0], StdinClosePressureCharacters),
             TimeSpan.FromMilliseconds(250))
