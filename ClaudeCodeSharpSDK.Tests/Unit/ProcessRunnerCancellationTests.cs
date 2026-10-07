@@ -38,6 +38,7 @@ public class ProcessRunnerCancellationTests
     private const string StandardOutputPressureCharacter = "s";
     private const int PipePressureCharacters = 262144;
     private const int LargePromptCharacters = 262144;
+    private const int StdinClosePressureCharacters = 16777216;
     private const int LargeProcessOutputCharacters = 1048576;
     private const string WindowsLongRunningCommand = "Write-Output $PID; Start-Sleep -Seconds 30";
     private const string WindowsSingleLineOverflowCommand = "Write-Output ('x' * 100); Start-Sleep -Seconds 30";
@@ -290,7 +291,7 @@ public class ProcessRunnerCancellationTests
             sandbox,
             [NodeEvaluationFlag, NodeClosingInputFixture, readyPath, releasePath, closedPath],
             OperatingSystem.IsWindows() ? CreateWindowsProcessEnvironment() : CreateEnvironment(),
-            new string(PromptCharacter[0], LargePromptCharacters),
+            new string(PromptCharacter[0], StdinClosePressureCharacters),
             TimeSpan.FromMilliseconds(250))
         {
             MaximumProcessOutputCharacters = LargeProcessOutputCharacters,
