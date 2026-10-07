@@ -284,6 +284,105 @@ public class ClaudeCliMetadataReaderTests
     }
 
     [Test]
+    public async Task ClaudeClient_GetCliLaunchCommand_DoesNotFallBackFromMissingExplicitPathToPathEntry()
+    {
+        var sandboxDirectory = Path.Combine(Environment.CurrentDirectory, "tests", ".sandbox",
+            $"{MetadataSandboxPrefix}{Guid.NewGuid():N}");
+        var pathDirectory = Path.Combine(sandboxDirectory, "bin");
+        Directory.CreateDirectory(pathDirectory);
+        var markerPath = Path.Combine(sandboxDirectory, "launched.marker");
+        var pathExecutable = Path.Combine(pathDirectory,
+            OperatingSystem.IsWindows() ? ClaudeCliLocator.ClaudeWindowsExecutableName : ClaudeCliLocator.ClaudeExecutableName);
+        var missingExecutable = Path.Combine(sandboxDirectory, "missing", Path.GetFileName(pathExecutable));
+
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var nodePath = FindNodeExecutablePath(Environment.GetEnvironmentVariable(PathEnvironmentVariable), isWindows: true);
+                File.Copy(nodePath, pathExecutable);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(pathExecutable, $"#!/bin/sh\nprintf started > '{markerPath}'\n");
+                File.SetUnixFileMode(pathExecutable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            var options = new ClaudeOptions
+            {
+                ClaudeExecutablePath = missingExecutable,
+                EnvironmentVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [PathEnvironmentVariable] = pathDirectory,
+                },
+                InheritEnvironmentVariables = false,
+            };
+            using var client = new ClaudeClient(options);
+
+            var exception = await Assert.That(() => client.GetCliLaunchCommand()).ThrowsException();
+
+            await Assert.That(exception).IsTypeOf<FileNotFoundException>();
+            await Assert.That(File.Exists(markerPath)).IsFalse();
+            var bareNameOptions = options with { ClaudeExecutablePath = Path.GetFileName(pathExecutable) };
+            await Assert.That(bareNameOptions.GetCliLaunchCommand().ExecutablePath).IsEqualTo(Path.GetFullPath(pathExecutable));
+        }
+        finally
+        {
+            Directory.Delete(sandboxDirectory, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ClaudeClient_GetCliLaunchCommand_RejectsMissingExplicitScriptBeforeRuntimeOrPackageResolution()
+    {
+        var sandboxDirectory = Path.Combine(Environment.CurrentDirectory, "tests", ".sandbox",
+            $"{MetadataSandboxPrefix}{Guid.NewGuid():N}");
+        var modulesDirectory = Path.Combine(sandboxDirectory, NodeModulesDirectory);
+        var packageDirectory = Path.Combine(modulesDirectory, NpmPackageScopeSegment, NpmPackageDirectory);
+        var shimDirectory = Path.Combine(modulesDirectory, DotBinDirectory);
+        Directory.CreateDirectory(packageDirectory);
+        Directory.CreateDirectory(shimDirectory);
+        try
+        {
+            var entrypointPath = Path.Combine(packageDirectory, NpmEntrypointRelativePath.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(entrypointPath)!);
+            await File.WriteAllTextAsync(Path.Combine(packageDirectory, NpmPackageManifestName), NpmPackageManifest);
+            await File.WriteAllTextAsync(entrypointPath, NodeCliFixture);
+            var nodePath = FindNodeExecutablePath(Environment.GetEnvironmentVariable(PathEnvironmentVariable), OperatingSystem.IsWindows());
+            var options = new ClaudeOptions
+            {
+                EnvironmentVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [PathEnvironmentVariable] = string.Join(Path.PathSeparator, Path.GetDirectoryName(nodePath)!,
+                        Environment.GetEnvironmentVariable(PathEnvironmentVariable) ?? string.Empty),
+                    [SystemRootEnvironmentVariable] = Environment.GetEnvironmentVariable(SystemRootEnvironmentVariable)
+                        ?? string.Empty,
+                },
+                InheritEnvironmentVariables = false,
+            };
+
+            await AssertMissingSelectionAsync(options, Path.Combine(sandboxDirectory, "missing", "claude.js"));
+            await AssertMissingSelectionAsync(options, Path.Combine("missing", "claude"));
+            if (OperatingSystem.IsWindows())
+            {
+                await AssertMissingSelectionAsync(options, Path.Combine(shimDirectory, NpmShimName));
+                await AssertMissingSelectionAsync(options, Path.Combine(shimDirectory, ClaudeCliLocator.ClaudeWindowsBatchName));
+            }
+        }
+        finally
+        {
+            Directory.Delete(sandboxDirectory, recursive: true);
+        }
+    }
+
+    private static async Task AssertMissingSelectionAsync(ClaudeOptions options, string selectedPath)
+    {
+        using var client = new ClaudeClient(options with { ClaudeExecutablePath = selectedPath });
+        var exception = await Assert.That(() => client.GetCliLaunchCommand()).ThrowsException();
+        await Assert.That(exception).IsTypeOf<FileNotFoundException>();
+    }
+
+    [Test]
     public async Task ClaudeExec_ResolvesJavaScriptEntryAndPassesPromptThroughStdin()
     {
         var sandboxDirectory = Path.Combine(Environment.CurrentDirectory, "tests", ".sandbox",

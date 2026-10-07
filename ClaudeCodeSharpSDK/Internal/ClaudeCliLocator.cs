@@ -81,7 +81,8 @@ internal static class ClaudeCliLocator
 
         if (!string.IsNullOrWhiteSpace(overridePath))
         {
-            return ResolveConfiguredPath(overridePath, environment, maximumManifestCharacters);
+            var selectedPath = ResolveExplicitSelection(overridePath, environment);
+            return ResolveConfiguredPath(selectedPath, environment, maximumManifestCharacters);
         }
 
         if (TryResolveNodeModulesBinary(EnumerateSearchRoots(), OperatingSystem.IsWindows(), out var nodeModulesBinary))
@@ -95,6 +96,26 @@ internal static class ClaudeCliLocator
         }
 
         throw new InvalidOperationException(ExecutableNotFoundMessage);
+    }
+
+    private static string ResolveExplicitSelection(string path, IReadOnlyDictionary<string, string> environment)
+    {
+        if (HasPathComponents(path))
+        {
+            if (File.Exists(path))
+            {
+                return Path.GetFullPath(path);
+            }
+
+            throw new FileNotFoundException(ExecutableNotFoundMessage, path);
+        }
+
+        if (TryResolveNamedExecutable(path, TryGetEnvironmentPath(environment), OperatingSystem.IsWindows(), out var resolved))
+        {
+            return resolved;
+        }
+
+        throw new FileNotFoundException(ExecutableNotFoundMessage, path);
     }
 
     private static CliLaunchCommand ResolveConfiguredPath(
@@ -317,12 +338,12 @@ internal static class ClaudeCliLocator
             return new CliLaunchCommand(Path.GetFullPath(path), []);
         }
 
-        if (!string.IsNullOrWhiteSpace(pathVariable))
+        var hasDirectory = HasPathComponents(path);
+        if (!hasDirectory && !string.IsNullOrWhiteSpace(pathVariable))
         {
-            var fileName = Path.GetFileName(path);
             foreach (var pathEntry in SplitPathVariable(pathVariable))
             {
-                var candidate = Path.Combine(pathEntry, fileName);
+                var candidate = Path.Combine(pathEntry, path);
                 if (File.Exists(candidate))
                 {
                     return new CliLaunchCommand(Path.GetFullPath(candidate), []);
@@ -330,12 +351,24 @@ internal static class ClaudeCliLocator
             }
         }
 
+        if (hasDirectory)
+        {
+            throw new FileNotFoundException(ExecutableNotFoundMessage, path);
+        }
+
         if (isWindows && !IsSupportedWindowsNativeExecutable(path))
         {
             throw new InvalidOperationException(UnsupportedShimMessage);
         }
 
-        throw new InvalidOperationException(ExecutableNotFoundMessage);
+        throw new FileNotFoundException(ExecutableNotFoundMessage, path);
+    }
+
+    private static bool HasPathComponents(string path)
+    {
+        return Path.IsPathRooted(path) ||
+               path.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+               path.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static bool IsSupportedWindowsNativeExecutable(string path)
