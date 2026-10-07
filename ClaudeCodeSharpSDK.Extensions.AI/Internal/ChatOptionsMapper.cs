@@ -7,6 +7,7 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Extensions.AI.Internal;
 
 internal static class ChatOptionsMapper
 {
+    private const string GenerationOptionsUnsupportedMessage = "The Claude CLI adapter does not support the requested MEAI generation options.";
     private const string FunctionToolsUnsupportedMessage = "MEAI function tools are not supported by the Claude CLI adapter.";
     private const string ToolModeUnsupportedMessage = "Only automatic MEAI tool mode is supported by the Claude CLI adapter.";
     private const string InvalidValueMessagePrefix = "Invalid value for Claude chat option";
@@ -21,6 +22,17 @@ internal static class ChatOptionsMapper
     internal const string SystemPromptKey = "claude:system_prompt";
     internal const string AppendSystemPromptKey = "claude:append_system_prompt";
     internal const string MaxBudgetUsdKey = "claude:max_budget_usd";
+
+    internal static void ValidateGenerationOptions(ChatOptions? options)
+    {
+        if (options is { Temperature: not null } or { TopP: not null } or { TopK: not null } or
+            { MaxOutputTokens: not null } or { Seed: not null } or { FrequencyPenalty: not null } or
+            { PresencePenalty: not null } || options?.StopSequences is { Count: > 0 } ||
+            options?.ResponseFormat is { } format && format is not ChatResponseFormatText)
+        {
+            throw new NotSupportedException(GenerationOptionsUnsupportedMessage);
+        }
+    }
 
     internal static void ValidateFunctionCallingOptions(ChatOptions? chatOptions)
     {

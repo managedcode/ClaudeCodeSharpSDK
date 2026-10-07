@@ -9,9 +9,13 @@ internal static class ChatMessageMapper
     private const string ParagraphSeparator = "\n\n";
     private const string ImageUnsupportedMessage = "Claude Code chat adapter currently supports text-only prompts.";
 
-    internal static string ToClaudeInput(IEnumerable<ChatMessage> messages)
+    internal static string ToClaudeInput(IEnumerable<ChatMessage> messages, string? instructions = null)
     {
         var promptParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(instructions))
+        {
+            promptParts.Add(string.Concat(SystemPrefix, instructions));
+        }
 
         foreach (var message in messages)
         {

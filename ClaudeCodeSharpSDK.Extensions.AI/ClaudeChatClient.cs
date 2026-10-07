@@ -25,8 +25,9 @@ public sealed class ClaudeChatClient : IChatClient
     {
         ArgumentNullException.ThrowIfNull(messages);
         ChatOptionsMapper.ValidateFunctionCallingOptions(options);
+        ChatOptionsMapper.ValidateGenerationOptions(options);
 
-        var prompt = ChatMessageMapper.ToClaudeInput(messages);
+        var prompt = ChatMessageMapper.ToClaudeInput(messages, options?.Instructions);
         var threadOptions = ChatOptionsMapper.ToThreadOptions(options, _options);
         var turnOptions = ChatOptionsMapper.ToTurnOptions(options, cancellationToken);
 
@@ -48,8 +49,9 @@ public sealed class ClaudeChatClient : IChatClient
     {
         ArgumentNullException.ThrowIfNull(messages);
         ChatOptionsMapper.ValidateFunctionCallingOptions(options);
+        ChatOptionsMapper.ValidateGenerationOptions(options);
 
-        var prompt = ChatMessageMapper.ToClaudeInput(messages);
+        var prompt = ChatMessageMapper.ToClaudeInput(messages, options?.Instructions);
         var threadOptions = ChatOptionsMapper.ToThreadOptions(options, _options);
         var turnOptions = ChatOptionsMapper.ToTurnOptions(options, cancellationToken);
 
