@@ -473,7 +473,7 @@ public sealed class CliInstallationTests
         {
             var setsidPath = FindExecutablePath(SetsidCommandName);
             npmSource = npmSource.Replace(SetsidPathPlaceholder,
-                System.Text.Json.JsonEncodedText.Encode(setsidPath).ToString(), StringComparison.Ordinal);
+                "\"" + System.Text.Json.JsonEncodedText.Encode(setsidPath) + "\"", StringComparison.Ordinal);
         }
         await File.WriteAllTextAsync(npmScript, npmSource);
         var systemRoot = Environment.GetEnvironmentVariable(SystemRootName);
