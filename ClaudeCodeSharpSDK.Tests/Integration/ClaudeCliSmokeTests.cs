@@ -7,6 +7,7 @@ using ManagedCode.ClaudeCodeSharpSDK.Tests.Shared;
 
 namespace ManagedCode.ClaudeCodeSharpSDK.Tests.Integration;
 
+[NotInParallel("CliProcess")]
 public class ClaudeCliSmokeTests
 {
     private const string SandboxPrefix = "ClaudeCliSmokeTests-";
@@ -42,7 +43,8 @@ public class ClaudeCliSmokeTests
     private const string MessageQuote = "'";
     private const string MessageSuffix = ".";
     private static readonly string[] StandardLineSeparators = [Environment.NewLine, NewLine, CarriageReturn];
-    private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan TestTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan TestCleanupTimeout = TimeSpan.FromSeconds(10);
 
     [Test]
     public async Task ClaudeCli_Smoke_FindExecutablePath_ResolvesExistingBinary()
@@ -216,32 +218,59 @@ public class ClaudeCliSmokeTests
                     MessageSuffix));
         }
 
-        process.StandardInput.Close();
-
-        using var registration = cancellationToken.Register(() =>
+        Task<string>? standardOutputTask = null;
+        Task<string>? standardErrorTask = null;
+        try
         {
-            try
+            process.StandardInput.Close();
+            standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            var output = await Task.WhenAll(standardOutputTask, standardErrorTask)
+                .WaitAsync(TestCleanupTimeout, cancellationToken);
+            return new ClaudeProcessResult(process.ExitCode, output[0], output[1]);
+        }
+        finally
+        {
+            if (!process.HasExited)
             {
-                if (!process.HasExited)
+                try
                 {
                     process.Kill(entireProcessTree: true);
                 }
+                catch (InvalidOperationException) when (process.HasExited)
+                {
+                    // The CLI exited between the state check and the kill request.
+                }
             }
-            catch (InvalidOperationException)
+
+            if (!process.HasExited)
             {
-                // Process already exited between check and kill — safe to ignore.
+                await process.WaitForExitAsync().WaitAsync(TestCleanupTimeout);
             }
-        });
 
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            process.StandardOutput.Dispose();
+            process.StandardError.Dispose();
+            if (standardOutputTask is not null && standardErrorTask is not null)
+            {
+                await ObserveReadersAsync(standardOutputTask, standardErrorTask, cancellationToken);
+            }
+        }
+    }
 
-        await process.WaitForExitAsync(cancellationToken);
-
-        return new ClaudeProcessResult(
-            process.ExitCode,
-            await standardOutputTask,
-            await standardErrorTask);
+    private static async Task ObserveReadersAsync(
+        Task<string> standardOutputTask,
+        Task<string> standardErrorTask,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.WhenAll(standardOutputTask, standardErrorTask).WaitAsync(TestCleanupTimeout, CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A timed-out smoke process has had its owned output reads canceled and observed.
+        }
     }
 
     private sealed record ClaudeProcessResult(int ExitCode, string StandardOutput, string StandardError);

@@ -24,6 +24,7 @@ Verify `ManagedCode.ClaudeCodeSharpSDK` behavior against real Claude Code CLI co
 - Keep protocol parser coverage for all supported event/item kinds.
 - Keep a large-stream parser performance profile test to catch regressions.
 - Treat `claude -p --output-format json|stream-json` as the protocol source of truth for smoke and parser tests.
+- Tests that launch installed CLIs or exercise SDK process cleanup share the TUnit `CliProcess` non-parallel constraint, preventing real CLI startup and cleanup fixtures from contending for process and pipe resources.
 
 ## Commands
 
