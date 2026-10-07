@@ -45,7 +45,7 @@ public class ProcessRunnerCancellationTests
     private const string WindowsNonZeroExitCommand = "[Console]::Error.WriteLine('provider failed'); exit 23";
     private const string WindowsNonZeroExitBeforeInputCommand = "[Console]::Error.WriteLine('provider failed'); Start-Sleep -Milliseconds 100; exit 23";
     private const string WindowsZeroExitAfterClosingInputCommand = "[Console]::OpenStandardInput().Dispose(); Start-Sleep -Milliseconds 100; exit 0";
-    private const string WindowsStaysRunningAfterClosingInputCommand = "Write-Output 'started'; [Console]::OpenStandardInput().Dispose(); Start-Sleep -Seconds 30";
+    private const string WindowsStaysRunningAfterClosingInputCommand = "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class CliTestNativeInput { [DllImport(\"kernel32.dll\")] public static extern bool CloseHandle(IntPtr handle); [DllImport(\"kernel32.dll\")] public static extern IntPtr GetStdHandle(int handle); }'; [CliTestNativeInput]::CloseHandle([CliTestNativeInput]::GetStdHandle(-10)); Write-Output 'started'; Start-Sleep -Seconds 30";
     private const string SystemRootVariableName = "SystemRoot";
     private const string WindowsDirectoryVariableName = "WINDIR";
     private const string PathVariableName = "PATH";
