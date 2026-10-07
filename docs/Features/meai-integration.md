@@ -39,7 +39,7 @@ Enable `ManagedCode.ClaudeCodeSharpSDK` to participate as a first-class provider
 - `ChatOptions.ConversationId` triggers thread resume via `ResumeThread(id)`.
 - Multiple `ChatMessage` entries are concatenated into a single prompt while preserving original message chronology (Claude Code CLI is single-prompt-per-turn).
 - `DataContent` is rejected with `NotSupportedException` because current Claude print-mode support is text-only in this SDK.
-- `ChatOptions.Tools` is ignored.
+- Nonempty `ChatOptions.Tools` and explicit non-Auto `ChatOptions.ToolMode` values fail with `NotSupportedException` before thread creation. The CLI owns its native tools internally; those controls are not MEAI `AITool` function calling.
 - `GetService<ChatClientMetadata>()` currently returns provider name `"ClaudeCodeCLI"`.
 - Streaming maps assistant text and usage events, not token-level deltas. Native Claude `tool_use` blocks and `tool_result` blocks are surfaced as metadata-only `ChatResponseUpdate` values through the fixed `managedcode:activity` categories `claude_tool_use` and `claude_tool_result`; tool names, IDs, inputs, and outputs are not projected into MEAI updates.
 - Once a streaming turn exposes a Claude thread ID, subsequent `ChatResponseUpdate` values keep that `ConversationId` so callers can resume the same session from streaming flows.

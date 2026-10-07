@@ -21,7 +21,7 @@ Implement `IChatClient` from `Microsoft.Extensions.AI.Abstractions` in a **separ
 
 4. **Thread-per-call with `ConversationId` resume** — Each `GetResponseAsync` call creates or resumes a `ClaudeThread`. Thread ID flows via `ChatResponse.ConversationId` for multi-turn continuity.
 
-5. **No `AITool` support** — Claude Code CLI manages tools internally. Consumer-registered `ChatOptions.Tools` are ignored.
+5. **No `AITool` support** — Claude Code CLI manages tools internally. Nonempty consumer `ChatOptions.Tools` and explicit non-Auto `ToolMode` values fail before thread creation instead of being silently ignored.
 
 ## Diagram
 
@@ -65,7 +65,7 @@ flowchart LR
 ### Neutral
 
 - Additional NuGet package to maintain.
-- `ChatOptions.Tools` is a documented no-op.
+- `ChatOptions.Tools` and unsupported explicit `ToolMode` values fail closed; automatic mode without supplied functions remains supported.
 
 ## Alternatives considered
 

@@ -24,6 +24,7 @@ public sealed class ClaudeChatClient : IChatClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        ChatOptionsMapper.ValidateFunctionCallingOptions(options);
 
         var prompt = ChatMessageMapper.ToClaudeInput(messages);
         var threadOptions = ChatOptionsMapper.ToThreadOptions(options, _options);
@@ -46,6 +47,7 @@ public sealed class ClaudeChatClient : IChatClient
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        ChatOptionsMapper.ValidateFunctionCallingOptions(options);
 
         var prompt = ChatMessageMapper.ToClaudeInput(messages);
         var threadOptions = ChatOptionsMapper.ToThreadOptions(options, _options);
