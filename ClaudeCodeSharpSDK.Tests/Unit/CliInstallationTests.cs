@@ -87,7 +87,7 @@ public sealed class CliInstallationTests
         if (process.platform !== 'win32') fs.chmodSync(shimPath, 0o755);
         if (fs.existsSync(path.join(__dirname, 'pipe-holder'))) {
             const { spawn } = require('node:child_process');
-            const childScript = 'printf "%s" "$$" > "$1.tmp" && mv "$1.tmp" "$1" && exec /bin/sleep 60';
+            const childScript = 'printf "%s" "$$" > "$1.tmp" && /bin/mv "$1.tmp" "$1" && exec /bin/sleep 60';
             const holder = spawn(SETSID_PATH_LITERAL, ['/bin/sh', '-c', childScript, 'holder',
                 path.join(__dirname, 'pipe-holder.pid')], { detached: true, stdio: 'inherit' });
             holder.unref();
