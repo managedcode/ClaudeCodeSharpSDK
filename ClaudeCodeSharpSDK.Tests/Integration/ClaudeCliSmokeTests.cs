@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using ManagedCode.ClaudeCodeSharpSDK.Client;
 using ManagedCode.ClaudeCodeSharpSDK.Configuration;
@@ -38,6 +39,7 @@ public class ClaudeCliSmokeTests
     private const string CarriageReturn = "\r";
     private const string CouldNotLocateRepositoryRootMessage = "Could not locate repository root from test execution directory.";
     private const string StartProcessFailedMessagePrefix = "Failed to start Claude Code CLI at";
+    private const string SmokeCleanupFailedMessage = "Claude CLI smoke process cleanup could not be fully confirmed.";
     private const string ClaudeCodeNestingEnvironmentVariable = "CLAUDECODE";
     private const string Space = " ";
     private const string MessageQuote = "'";
@@ -220,6 +222,8 @@ public class ClaudeCliSmokeTests
 
         Task<string>? standardOutputTask = null;
         Task<string>? standardErrorTask = null;
+        ClaudeProcessResult? result = null;
+        Exception? invocationFailure = null;
         try
         {
             process.StandardInput.Close();
@@ -228,34 +232,88 @@ public class ClaudeCliSmokeTests
             await process.WaitForExitAsync(cancellationToken);
             var output = await Task.WhenAll(standardOutputTask, standardErrorTask)
                 .WaitAsync(TestCleanupTimeout, cancellationToken);
-            return new ClaudeProcessResult(process.ExitCode, output[0], output[1]);
+            result = new ClaudeProcessResult(process.ExitCode, output[0], output[1]);
         }
-        finally
+        catch (Exception exception)
         {
-            if (!process.HasExited)
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException) when (process.HasExited)
-                {
-                    // The CLI exited between the state check and the kill request.
-                }
-            }
+            invocationFailure = exception;
+        }
 
-            if (!process.HasExited)
+        var cleanupFailures = new List<Exception>();
+        if (!process.HasExited)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException) when (process.HasExited)
+            {
+                // The CLI exited between the state check and the kill request.
+            }
+            catch (Exception exception)
+            {
+                cleanupFailures.Add(exception);
+            }
+        }
+
+        if (!process.HasExited)
+        {
+            try
             {
                 await process.WaitForExitAsync().WaitAsync(TestCleanupTimeout);
             }
+            catch (Exception exception)
+            {
+                cleanupFailures.Add(exception);
+            }
+        }
 
+        try
+        {
             process.StandardOutput.Dispose();
+        }
+        catch (Exception exception)
+        {
+            cleanupFailures.Add(exception);
+        }
+
+        try
+        {
             process.StandardError.Dispose();
-            if (standardOutputTask is not null && standardErrorTask is not null)
+        }
+        catch (Exception exception)
+        {
+            cleanupFailures.Add(exception);
+        }
+
+        if (standardOutputTask is not null && standardErrorTask is not null)
+        {
+            try
             {
                 await ObserveReadersAsync(standardOutputTask, standardErrorTask, cancellationToken);
             }
+            catch (Exception exception)
+            {
+                cleanupFailures.Add(exception);
+            }
         }
+
+        if (cleanupFailures.Count != 0)
+        {
+            if (invocationFailure is not null)
+            {
+                cleanupFailures.Insert(0, invocationFailure);
+            }
+
+            throw new AggregateException(SmokeCleanupFailedMessage, cleanupFailures);
+        }
+
+        if (invocationFailure is not null)
+        {
+            ExceptionDispatchInfo.Capture(invocationFailure).Throw();
+        }
+
+        return result!;
     }
 
     private static async Task ObserveReadersAsync(
