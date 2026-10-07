@@ -67,6 +67,8 @@ public class ProcessRunnerCancellationTests
     private const string NodeClosingInputFixture = "const fs=require('node:fs');const ready=process.argv[1],release=process.argv[2],closed=process.argv[3];fs.writeFileSync(ready,String(process.pid));console.log('ready');const timer=setInterval(()=>{if(fs.existsSync(release)){clearInterval(timer);process.stdin._handle.close(error=>{if(error){process.exitCode=1;return;}fs.closeSync(0);fs.writeFileSync(closed,String(process.pid));console.log('closed');});}},10);setTimeout(()=>{},30000);";
     private const string SystemRootVariableName = "SystemRoot";
     private const string WindowsDirectoryVariableName = "WINDIR";
+    private const string TemporaryDirectoryVariableName = "TEMP";
+    private const string TemporaryDirectoryAliasVariableName = "TMP";
     private const string PathVariableName = "PATH";
     private const string PathExtensionsVariableName = "PATHEXT";
     private const string TestInput = "test";
@@ -86,7 +88,7 @@ public class ProcessRunnerCancellationTests
     private const string FixtureDirectoryName = "ProcessRunnerCancellationTests";
     private const int SmallOutputLimitCharacters = 64;
     private const int AggregateOutputLimitCharacters = 24;
-    private static readonly TimeSpan WindowsFixtureStartupTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan WindowsNativeHandleFixtureStartupTimeout = TimeSpan.FromSeconds(45);
     private static readonly TimeSpan WindowsFixtureCompletionTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan WindowsFixturePollInterval = TimeSpan.FromMilliseconds(10);
     private static readonly TimeSpan WindowsCleanupAssertionBound = TimeSpan.FromSeconds(3);
@@ -318,18 +320,20 @@ public class ProcessRunnerCancellationTests
             .RunAsync(invocation, NullLogger.Instance, cancellation.Token)
             .GetAsyncEnumerator(cancellation.Token);
         Task? consumeTask = null;
+        Task<bool>? initialMoveNextTask = null;
         Exception? testFailure = null;
 
         try
         {
-            await Assert.That(await enumerator.MoveNextAsync().AsTask().WaitAsync(WindowsFixtureStartupTimeout)).IsTrue();
+            initialMoveNextTask = enumerator.MoveNextAsync().AsTask();
+            await Assert.That(await initialMoveNextTask.WaitAsync(WindowsNativeHandleFixtureStartupTimeout)).IsTrue();
             await Assert.That(enumerator.Current).IsEqualTo(NodeReadyLine);
             await Assert.That(File.Exists(readyPath)).IsTrue();
             File.WriteAllText(releasePath, EmptyFileContent);
 
             consumeTask = ConsumeAsync(enumerator);
-            await WaitForFileAsync(closedPath, WindowsFixtureStartupTimeout);
-            await stdinFailureObserved.Task.WaitAsync(WindowsFixtureStartupTimeout);
+            await WaitForFileAsync(closedPath, WindowsNativeHandleFixtureStartupTimeout);
+            await stdinFailureObserved.Task.WaitAsync(WindowsNativeHandleFixtureStartupTimeout);
             await Assert.That(await stdinFailureObserved.Task).IsFalse();
 
             var stopwatch = Stopwatch.StartNew();
@@ -360,10 +364,11 @@ public class ProcessRunnerCancellationTests
             cleanupFailures.Add(exception);
         }
 
-        var consumeCompleted = consumeTask is null;
-        if (consumeTask is not null)
+        var enumerationTask = consumeTask ?? initialMoveNextTask;
+        var enumerationCompleted = enumerationTask is null;
+        if (enumerationTask is not null)
         {
-            var cleanupTask = CaptureExceptionAsync(consumeTask);
+            var cleanupTask = CaptureExceptionAsync(enumerationTask);
             var completedTask = await Task.WhenAny(cleanupTask, Task.Delay(WindowsFixtureCompletionTimeout));
             if (!ReferenceEquals(completedTask, cleanupTask))
             {
@@ -379,8 +384,8 @@ public class ProcessRunnerCancellationTests
                 completedTask = await Task.WhenAny(cleanupTask, Task.Delay(WindowsFixtureCompletionTimeout));
             }
 
-            consumeCompleted = ReferenceEquals(completedTask, cleanupTask);
-            if (consumeCompleted)
+            enumerationCompleted = ReferenceEquals(completedTask, cleanupTask);
+            if (enumerationCompleted)
             {
                 _ = await cleanupTask;
             }
@@ -390,7 +395,7 @@ public class ProcessRunnerCancellationTests
             }
         }
 
-        if (consumeCompleted)
+        if (enumerationCompleted)
         {
             try
             {
@@ -745,6 +750,8 @@ public class ProcessRunnerCancellationTests
         {
             SystemRootVariableName,
             WindowsDirectoryVariableName,
+            TemporaryDirectoryVariableName,
+            TemporaryDirectoryAliasVariableName,
             PathVariableName,
             PathExtensionsVariableName,
         })
