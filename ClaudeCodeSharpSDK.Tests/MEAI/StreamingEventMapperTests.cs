@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using ManagedCode.ClaudeCodeSharpSDK.Configuration;
 using ManagedCode.ClaudeCodeSharpSDK.Extensions.AI.Internal;
 using ManagedCode.ClaudeCodeSharpSDK.Models;
@@ -30,10 +32,14 @@ public class StreamingEventMapperTests
     private const string TestsDirectoryName = "tests";
     private const string UserPrompt = "request";
     private const string ProviderFailureJson = "{\"type\":\"result\",\"is_error\":true,\"result\":\"authentication failed\"}";
+    private const string ProcessIdFileName = "root.pid";
+    private const string ProcessIdEnvironmentName = "CLAUDE_TEST_ROOT_PID";
+    private const string ExitCodeEnvironmentName = "CLAUDE_TEST_EXIT_CODE";
     private const string NodeScript = "const args = process.argv.slice(2);\n"
         + "if (args.includes('" + CliVersionFlag + "')) { console.log('" + MetadataScriptVersion + "'); process.exit(0); }\n"
+        + "require('node:fs').writeFileSync(process.env." + ProcessIdEnvironmentName + ", String(process.pid));\n"
         + "process.stdin.resume();\n"
-        + "process.stdin.on('end', () => process.stdout.write('" + ProviderFailureJson + "' + '\\n'));\n";
+        + "process.stdin.on('end', () => process.stdout.write('" + ProviderFailureJson + "' + '\\n', () => { process.exitCode = Number(process.env." + ExitCodeEnvironmentName + "); }));\n";
 
     [Test]
     public async Task ToUpdates_MapsThreadStartAssistantMessageAndUsage()
@@ -125,12 +131,15 @@ public class StreamingEventMapperTests
     }
 
     [Test]
-    public async Task ClaudeChatClient_ProviderFailureConfirmsOnlyAfterRealCliDisposal()
+    [Arguments(0)]
+    [Arguments(1)]
+    public async Task ClaudeChatClient_ProviderFailureConfirmsOnlyAfterRealCliDisposal(int exitCode)
     {
         var sandboxDirectory = Path.Combine(Environment.CurrentDirectory, TestsDirectoryName, SandboxDirectoryName,
             $"{Guid.NewGuid():N}");
         Directory.CreateDirectory(sandboxDirectory);
         var scriptPath = Path.Combine(sandboxDirectory, ScriptFileName);
+        var processIdPath = Path.Combine(sandboxDirectory, ProcessIdFileName);
         await File.WriteAllTextAsync(scriptPath, NodeScript);
 
         try
@@ -141,6 +150,11 @@ public class StreamingEventMapperTests
                 {
                     ClaudeExecutablePath = scriptPath,
                     ProcessTerminationTimeout = TimeSpan.FromSeconds(3),
+                    EnvironmentVariables = new Dictionary<string, string>
+                    {
+                        [ProcessIdEnvironmentName] = processIdPath,
+                        [ExitCodeEnvironmentName] = exitCode.ToString(CultureInfo.InvariantCulture),
+                    },
                 },
             });
             var action = async () =>
@@ -153,8 +167,21 @@ public class StreamingEventMapperTests
 
             var exception = await Assert.That(action).ThrowsException();
             await Assert.That(exception).IsTypeOf<CliExecutionFailureException>();
-            await Assert.That(((CliExecutionFailureException)exception!).ExitCode).IsNull();
+            await Assert.That(((CliExecutionFailureException)exception!).ExitCode).IsEqualTo(exitCode == 0 ? (int?)null : exitCode);
             await Assert.That(((CliExecutionFailureException)exception).RootProcessExitConfirmed).IsTrue();
+            var processId = int.Parse(await File.ReadAllTextAsync(processIdPath), CultureInfo.InvariantCulture);
+            var processes = Process.GetProcesses();
+            try
+            {
+                await Assert.That(processes.Any(process => process.Id == processId)).IsFalse();
+            }
+            finally
+            {
+                foreach (var process in processes)
+                {
+                    process.Dispose();
+                }
+            }
         }
         finally
         {
