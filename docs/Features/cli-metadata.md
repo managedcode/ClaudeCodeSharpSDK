@@ -9,7 +9,9 @@ Source of truth: local `claude` CLI behavior + upstream `anthropics/claude-code`
 
 ## Purpose
 
-The SDK package version mirrors the targeted Claude Code CLI version in its first three numeric components and uses the fourth component for an SDK hotfix. `ClaudeCliCompatibility.TargetVersion` exposes the exact compatible CLI target without starting a process. `GetCliUpdateStatus()` separately reports the latest version discovered from upstream.
+The SDK package version mirrors the targeted Claude Code CLI version in its first three numeric components and uses the fourth component for an SDK hotfix. `ClaudeCliCompatibility.TargetVersion` exposes the managed-installation and release-verification target without starting a process. `GetCliUpdateStatus()` separately reports the latest version discovered from upstream.
+
+Installed CLI versions are not required to match `TargetVersion`. Metadata reports the actual installed version, and execution uses that CLI; unavailable flags or features fail through the actual CLI operation rather than a version-number admission gate.
 
 Expose runtime Claude Code CLI metadata to SDK consumers:
 
