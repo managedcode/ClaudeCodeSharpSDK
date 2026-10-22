@@ -476,6 +476,15 @@ internal static class ClaudeCliMetadataReader
         bool inheritEnvironmentVariables,
         int maximumOutputCharacters)
     {
+        var configuredModel = environment.GetValueOrDefault("ANTHROPIC_MODEL");
+        if (string.IsNullOrWhiteSpace(configuredModel) && inheritEnvironmentVariables)
+        {
+            configuredModel = Environment.GetEnvironmentVariable("ANTHROPIC_MODEL");
+        }
+        if (!string.IsNullOrWhiteSpace(configuredModel))
+        {
+            return configuredModel;
+        }
         foreach (var settingsPath in EnumerateSettingsFiles(environment, inheritEnvironmentVariables))
         {
             if (!File.Exists(settingsPath))

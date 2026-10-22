@@ -25,6 +25,7 @@ internal static class ThreadEventParser
 
         return type switch
         {
+            ClaudeProtocolConstants.EventTypes.StreamEvent => ParsePartialMessage(root),
             ClaudeProtocolConstants.EventTypes.System => ParseSystem(root),
             ClaudeProtocolConstants.EventTypes.Assistant => new ItemCompletedEvent(ParseAssistantMessage(root)),
             ClaudeProtocolConstants.EventTypes.User => new ItemCompletedEvent(ParseUserMessage(root)),
@@ -34,6 +35,34 @@ internal static class ThreadEventParser
                                                                             ?? ErrorEventDefaultMessage),
             _ => new UnknownEvent(type, JsonNode.Parse(root.GetRawText()) ?? new JsonObject()),
         };
+    }
+
+    private static ThreadEvent ParsePartialMessage(JsonElement root)
+    {
+        // Nested agent output has its own message lifecycle; only the root assistant writes this response.
+        if (GetOptionalString(root, ClaudeProtocolConstants.Properties.ParentToolUseId) is not null)
+        {
+            return new UnknownEvent(ClaudeProtocolConstants.EventTypes.StreamEvent, JsonNode.Parse(root.GetRawText())!);
+        }
+        var streamEvent = GetRequiredProperty(root, "event");
+        var kind = GetRequiredString(streamEvent, ClaudeProtocolConstants.Properties.Type);
+        if (kind == "message_start")
+        {
+            var message = GetRequiredProperty(streamEvent, ClaudeProtocolConstants.Properties.Message);
+            return new AssistantMessageStartedEvent(GetRequiredString(message, ClaudeProtocolConstants.Properties.Id));
+        }
+        if (kind == "content_block_delta")
+        {
+            var delta = GetRequiredProperty(streamEvent, "delta");
+            if (GetRequiredString(delta, ClaudeProtocolConstants.Properties.Type) == "text_delta")
+            {
+                var index = GetRequiredProperty(streamEvent, "index").GetInt32();
+                ArgumentOutOfRangeException.ThrowIfNegative(index);
+                return new AssistantTextDeltaEvent(index, GetRequiredProperty(delta, ClaudeProtocolConstants.Properties.Text).GetString()
+                    ?? throw new JsonException("Claude text delta must contain a string."));
+            }
+        }
+        return new UnknownEvent(ClaudeProtocolConstants.EventTypes.StreamEvent, JsonNode.Parse(root.GetRawText())!);
     }
 
     private static ThreadEvent ParseSystem(JsonElement root)

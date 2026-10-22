@@ -47,6 +47,7 @@ internal static class ClaudeProtocolConstants
 
     internal static class EventTypes
     {
+        internal const string StreamEvent = "stream_event";
         internal const string Assistant = "assistant";
         internal const string Error = "error";
         internal const string ItemCompleted = "item.completed";

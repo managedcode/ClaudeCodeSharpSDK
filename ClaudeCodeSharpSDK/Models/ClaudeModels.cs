@@ -26,6 +26,19 @@ public static class ClaudeModels
     private const string ClaudeSonnet3DisplayName = "Claude Sonnet 3";
     private const string ClaudeOpus3DisplayName = "Claude Opus 3";
 
+    public const string Fable = "fable";
+    public const string ClaudeFable51 = "claude-fable-5-1";
+    public const string ClaudeOpus55 = "claude-opus-5-5";
+    public const string ClaudeSonnet55 = "claude-sonnet-5-5";
+    public const string ClaudeHaiku55 = "claude-haiku-5-5";
+    public const string ClaudeOpus5 = "claude-opus-5";
+    public const string ClaudeSonnet5 = "claude-sonnet-5";
+    public const string ClaudeFable5 = "claude-fable-5";
+    public const string ClaudeOpus48 = "claude-opus-4-8";
+    public const string ClaudeOpus47 = "claude-opus-4-7";
+    public const string ClaudeOpus46 = "claude-opus-4-6";
+    public const string ClaudeSonnet46 = "claude-sonnet-4-6";
+
     public const string Sonnet = "sonnet";
     public const string Opus = "opus";
     public const string Haiku = "haiku";
@@ -53,6 +66,18 @@ public static class ClaudeModels
 
     public static IReadOnlyList<ClaudeModelMetadata> Known { get; } =
     [
+        new(Fable, "Fable", null, true),
+        new(ClaudeFable51, "Claude Fable 5.1", null, true),
+        new(ClaudeOpus55, "Claude Opus 5.5", null, true),
+        new(ClaudeSonnet55, "Claude Sonnet 5.5", null, true),
+        new(ClaudeHaiku55, "Claude Haiku 5.5", null, true),
+        new(ClaudeOpus5, "Claude Opus 5", null, true),
+        new(ClaudeSonnet5, "Claude Sonnet 5", null, true),
+        new(ClaudeFable5, "Claude Fable 5", null, true),
+        new(ClaudeOpus48, "Claude Opus 4.8", null, true),
+        new(ClaudeOpus47, "Claude Opus 4.7", null, true),
+        new(ClaudeOpus46, "Claude Opus 4.6", null, true),
+        new(ClaudeSonnet46, "Claude Sonnet 4.6", null, true),
         new(Sonnet, Sonnet, LatestSonnetDescription, true),
         new(Opus, Opus, LatestOpusDescription, true),
         new(Haiku, Haiku, LatestHaikuDescription, true),

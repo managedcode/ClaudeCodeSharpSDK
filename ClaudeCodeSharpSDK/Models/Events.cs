@@ -70,5 +70,11 @@ public sealed record ItemCompletedEvent(ThreadItem Item)
 public sealed record ThreadErrorEvent(string Message)
     : ThreadEvent(ClaudeProtocolConstants.EventTypes.Error);
 
+public sealed record AssistantMessageStartedEvent(string MessageId)
+    : ThreadEvent(ClaudeProtocolConstants.EventTypes.StreamEvent);
+
+public sealed record AssistantTextDeltaEvent(int ContentIndex, string Text)
+    : ThreadEvent(ClaudeProtocolConstants.EventTypes.StreamEvent);
+
 public sealed record UnknownEvent(string RawType, JsonNode Payload)
     : ThreadEvent(RawType);

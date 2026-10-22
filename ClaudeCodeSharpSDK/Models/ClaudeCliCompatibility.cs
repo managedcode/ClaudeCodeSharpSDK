@@ -4,5 +4,5 @@ namespace ManagedCode.ClaudeCodeSharpSDK.Models;
 public static class ClaudeCliCompatibility
 {
     /// <summary>The upstream CLI version selected for managed installation and release verification; other installed versions are allowed.</summary>
-    public const string TargetVersion = "2.1.301";
+    public const string TargetVersion = "2.1.308";
 }

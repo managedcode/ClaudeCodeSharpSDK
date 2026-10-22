@@ -471,3 +471,5 @@ dotnet test --project ClaudeCodeSharpSDK.Tests/ClaudeCodeSharpSDK.Tests.csproj -
 - M.E.AI adapter: [docs/Features/meai-integration.md](docs/Features/meai-integration.md)
 - automation and upstream sync: [docs/Features/release-and-sync-automation.md](docs/Features/release-and-sync-automation.md)
 - ADRs: [docs/ADR](docs/ADR)
+
+Streaming enables native partial messages by default and exposes text deltas through the core SDK and MEAI adapter. Text/tool/text blocks sharing one message ID continue normally; final snapshots do not duplicate streamed text. The CLI release target is `2.1.308`.

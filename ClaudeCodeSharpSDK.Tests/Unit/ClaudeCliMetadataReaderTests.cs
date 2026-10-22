@@ -147,7 +147,7 @@ public class ClaudeCliMetadataReaderTests
     }
 
     [Test]
-    public async Task ClaudeClient_GetCliMetadata_UsesConfiguredSettingsAndEnvironmentAllowlist()
+    public async Task ClaudeClient_GetCliMetadata_UsesExplicitModelEnvironmentAndEnvironmentAllowlist()
     {
         var configDirectory = Path.Combine(Environment.CurrentDirectory, "tests", ".sandbox",
             $"{MetadataSandboxPrefix}{Guid.NewGuid():N}");
@@ -163,13 +163,14 @@ public class ClaudeCliMetadataReaderTests
                     [PathEnvironmentVariable] = Environment.GetEnvironmentVariable(PathEnvironmentVariable) ?? string.Empty,
                     [SystemRootEnvironmentVariable] = Environment.GetEnvironmentVariable(SystemRootEnvironmentVariable) ?? string.Empty,
                     [ClaudeConfigDirectoryEnvironmentVariable] = configDirectory,
+                    ["ANTHROPIC_MODEL"] = ClaudeModels.Haiku,
                 },
                 InheritEnvironmentVariables = false,
             });
 
             var metadata = client.GetCliMetadata();
 
-            await Assert.That(metadata.DefaultModel).IsEqualTo(ClaudeModels.Sonnet);
+            await Assert.That(metadata.DefaultModel).IsEqualTo(ClaudeModels.Haiku);
             await Assert.That(string.IsNullOrWhiteSpace(metadata.InstalledVersion)).IsFalse();
         }
         finally

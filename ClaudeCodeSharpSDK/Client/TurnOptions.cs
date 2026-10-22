@@ -6,7 +6,7 @@ public sealed record TurnOptions
 {
     public StructuredOutputSchema? OutputSchema { get; init; }
 
-    public bool IncludePartialMessages { get; init; }
+    public bool IncludePartialMessages { get; init; } = true;
 
     public bool ReplayUserMessages { get; init; }
 

@@ -15,6 +15,7 @@ internal static class StreamingEventMapper
         IAsyncEnumerable<ThreadEvent> events,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        var textStream = new AssistantTextStream();
         string? conversationId = null;
         string? failureMessage = null;
 
@@ -33,16 +34,34 @@ internal static class StreamingEventMapper
                     yield return new ChatResponseUpdate { ConversationId = conversationId };
                     break;
 
+                case AssistantMessageStartedEvent started:
+                    textStream.Start(started.MessageId);
+                    break;
+
+                case AssistantTextDeltaEvent delta:
+                    var deltaText = textStream.Append(delta.ContentIndex, delta.Text);
+                    if (deltaText.Length > 0)
+                    {
+                        yield return new ChatResponseUpdate(ChatRole.Assistant, [new TextContent(deltaText)])
+                        {
+                            ConversationId = conversationId,
+                            MessageId = textStream.MessageId,
+                        };
+                    }
+                    break;
+
                 case ItemCompletedEvent { Item: AssistantMessageItem assistant }:
                 {
+                    var text = textStream.Complete(assistant.Id, assistant.Text);
                     var toolUse = assistant.Content.Any(static block => block.Type == ToolUseContentType);
-                    if (!string.IsNullOrEmpty(assistant.Text) || toolUse)
+                    if (!string.IsNullOrEmpty(text) || toolUse)
                     {
                         yield return new ChatResponseUpdate
                         {
                             ConversationId = conversationId,
                             Role = ChatRole.Assistant,
-                            Contents = string.IsNullOrEmpty(assistant.Text) ? [] : [new TextContent(assistant.Text)],
+                            Contents = string.IsNullOrEmpty(text) ? [] : [new TextContent(text)],
+                            MessageId = assistant.Id,
                             AdditionalProperties = toolUse
                                 ? new AdditionalPropertiesDictionary { [NativeActivityProperty] = ClaudeToolUseActivity }
                                 : null,

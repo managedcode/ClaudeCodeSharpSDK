@@ -87,3 +87,5 @@ flowchart LR
 - Unit parsing/update-check coverage: [ClaudeCliMetadataReaderTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/ClaudeCliMetadataReaderTests.cs)
 - CLI arg behavior: [ClaudeExecTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/ClaudeExecTests.cs)
 - Isolated install/update process behavior: [CliInstallationTests.cs](../../ClaudeCodeSharpSDK.Tests/Unit/CliInstallationTests.cs)
+
+The effective default model honors explicit `ANTHROPIC_MODEL`, then inherited `ANTHROPIC_MODEL` only when environment inheritance is enabled, before reading native settings. The known catalog includes the current Fable, Opus, Sonnet and Haiku model IDs documented in the [official model catalog](https://platform.claude.com/docs/en/models/overview); account availability remains a native CLI concern.
