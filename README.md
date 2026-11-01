@@ -473,3 +473,31 @@ dotnet test --project ClaudeCodeSharpSDK.Tests/ClaudeCodeSharpSDK.Tests.csproj -
 - ADRs: [docs/ADR](docs/ADR)
 
 Streaming enables native partial messages by default and exposes text deltas through the core SDK and MEAI adapter. Text/tool/text blocks sharing one message ID continue normally; final snapshots do not duplicate streamed text. The CLI release target is `2.1.308`.
+
+## Sign in from your application
+
+The SDK can start native CLI sign-in and return the browser URL for your user. Keep the returned session alive until sign-in finishes.
+
+```csharp
+await using var login = await client.BeginLoginAsync(cancellationToken);
+var instructions = login.Instructions;
+if (instructions is not null)
+{
+    Console.WriteLine(instructions.LoginUrl);
+    Console.WriteLine(instructions.UserCode);
+}
+
+while (instructions?.RequiresAuthorizationCode == true)
+{
+    var code = Console.ReadLine() ?? throw new InvalidOperationException("Authorization code required.");
+    instructions = await login.SubmitAuthorizationCodeAsync(code, cancellationToken);
+    if (instructions is not null)
+    {
+        Console.WriteLine(instructions.LoginUrl);
+    }
+}
+
+await login.WaitForCompletionAsync(cancellationToken);
+```
+
+`CancelAsync` or disposal terminates unfinished sign-in. Cancelling a completion wait leaves native sign-in running. Credentials stay in the selected CLI profile; select a separate profile for each server user and reuse it for agent execution. See [native sign-in](docs/Features/cli-login.md) for retry, cancellation and profile details.

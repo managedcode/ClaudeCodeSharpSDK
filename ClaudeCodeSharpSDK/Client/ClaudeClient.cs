@@ -34,6 +34,18 @@ public sealed class ClaudeClient : IDisposable
 
     public ClaudeClientState State => _connectionState.GetSnapshot();
 
+    /// <summary>Starts native sign-in and returns when instructions or cached-credential success are available.</summary>
+    /// <remarks>The returned session owns its process independently of this client. Dispose it after use.</remarks>
+    public Task<CliLoginSession> BeginLoginAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(State == ClaudeClientState.Disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        var launchCommand = GetCliLaunchCommand();
+        var exec = CreateExec();
+        return CliLoginSession.StartAsync(launchCommand, exec.BuildEnvironment(_options.BaseUrl, _options.ApiKey),
+            _options.Settings, _options.ProcessTerminationTimeout, _options.MaximumProcessOutputCharacters, cancellationToken);
+    }
+
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

@@ -87,6 +87,8 @@ flowchart LR
 
 ### 2.1 Modules
 
+- `Native sign-in` — code: [CliLoginSession](../../ClaudeCodeSharpSDK/Client/CliLoginSession.cs); behavior: [cli-login.md](../Features/cli-login.md); decision: [ADR 005](../ADR/005-native-cli-sign-in.md).
+
 - `Public API` — code: [ClaudeClient.cs](../../ClaudeCodeSharpSDK/Client/ClaudeClient.cs), [ClaudeThread.cs](../../ClaudeCodeSharpSDK/Client/ClaudeThread.cs); docs: [thread-run-flow.md](../Features/thread-run-flow.md)
 - `Execution Layer` — code: [ClaudeExec.cs](../../ClaudeCodeSharpSDK/Execution/ClaudeExec.cs), [ClaudeExecArgs.cs](../../ClaudeCodeSharpSDK/Execution/ClaudeExecArgs.cs)
 - `Protocol Parsing` — code: [ThreadEventParser.cs](../../ClaudeCodeSharpSDK/Internal/ThreadEventParser.cs), [ClaudeProtocolConstants.cs](../../ClaudeCodeSharpSDK/Internal/ClaudeProtocolConstants.cs), [Events.cs](../../ClaudeCodeSharpSDK/Models/Events.cs), [Items.cs](../../ClaudeCodeSharpSDK/Models/Items.cs)
